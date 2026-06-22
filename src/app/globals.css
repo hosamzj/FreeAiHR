@@ -193,3 +193,12 @@ body {
 .funnel-bar:hover {
   filter: brightness(1.2);
 }
+
+/* Hide scrollbar for horizontal scroll areas */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

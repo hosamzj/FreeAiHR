@@ -4,6 +4,7 @@ export interface Candidate {
   id: string;
   name: string;
   avatar: string;
+  avatarColor?: string;
   email: string;
   phone: string;
   position: string;
@@ -23,6 +24,7 @@ export interface Candidate {
   aiSummary?: string;
   matchedSkills: string[];
   unmatchedSkills: string[];
+  isAIRecommended?: boolean;
 }
 
 export interface WorkHistory {
@@ -118,6 +120,8 @@ export const mockCandidates: Candidate[] = [
     matchScore: 92,
     status: 'interview',
     tags: ['AI推荐', '高匹配'],
+    avatarColor: 'bg-gradient-to-br from-sky-500/20 to-blue-600/20 text-sky-400 border border-sky-500/20',
+    isAIRecommended: true,
     appliedAt: '2024-01-15',
     source: 'Boss直聘',
     workHistory: [
@@ -144,6 +148,8 @@ export const mockCandidates: Candidate[] = [
     matchScore: 87,
     status: 'screening',
     tags: ['AI推荐', '经验丰富'],
+    avatarColor: 'bg-gradient-to-br from-violet-500/20 to-purple-600/20 text-violet-400 border border-violet-500/20',
+    isAIRecommended: true,
     appliedAt: '2024-01-16',
     source: '猎聘',
     workHistory: [
@@ -170,6 +176,8 @@ export const mockCandidates: Candidate[] = [
     matchScore: 75,
     status: 'new',
     tags: ['待评估'],
+    avatarColor: 'bg-gradient-to-br from-emerald-500/20 to-green-600/20 text-emerald-400 border border-emerald-500/20',
+    isAIRecommended: false,
     appliedAt: '2024-01-17',
     source: '拉勾网',
     workHistory: [
@@ -195,6 +203,8 @@ export const mockCandidates: Candidate[] = [
     matchScore: 95,
     status: 'offer',
     tags: ['AI推荐', '高匹配', '优秀'],
+    avatarColor: 'bg-gradient-to-br from-orange-500/20 to-amber-600/20 text-orange-400 border border-orange-500/20',
+    isAIRecommended: true,
     appliedAt: '2024-01-10',
     source: '站酷',
     workHistory: [
@@ -221,6 +231,8 @@ export const mockCandidates: Candidate[] = [
     matchScore: 88,
     status: 'interview',
     tags: ['AI推荐', '技术强'],
+    avatarColor: 'bg-gradient-to-br from-pink-500/20 to-rose-600/20 text-pink-400 border border-pink-500/20',
+    isAIRecommended: true,
     appliedAt: '2024-01-14',
     source: '脉脉',
     workHistory: [
@@ -247,6 +259,8 @@ export const mockCandidates: Candidate[] = [
     matchScore: 83,
     status: 'screening',
     tags: ['潜力股'],
+    avatarColor: 'bg-gradient-to-br from-cyan-500/20 to-teal-600/20 text-cyan-400 border border-cyan-500/20',
+    isAIRecommended: false,
     appliedAt: '2024-01-18',
     source: 'Boss直聘',
     workHistory: [
@@ -272,6 +286,8 @@ export const mockCandidates: Candidate[] = [
     matchScore: 79,
     status: 'new',
     tags: ['待评估'],
+    avatarColor: 'bg-gradient-to-br from-indigo-500/20 to-blue-600/20 text-indigo-400 border border-indigo-500/20',
+    isAIRecommended: false,
     appliedAt: '2024-01-19',
     source: '智联招聘',
     workHistory: [
@@ -297,6 +313,8 @@ export const mockCandidates: Candidate[] = [
     matchScore: 91,
     status: 'interview',
     tags: ['AI推荐', 'B端专家'],
+    avatarColor: 'bg-gradient-to-br from-amber-500/20 to-yellow-600/20 text-amber-400 border border-amber-500/20',
+    isAIRecommended: true,
     appliedAt: '2024-01-12',
     source: '猎聘',
     workHistory: [
@@ -485,4 +503,69 @@ export const dashboardStats = {
     { week: 'W3', resumes: 55, interviews: 12, offers: 3 },
     { week: 'W4', resumes: 48, interviews: 9, offers: 2 },
   ],
+};
+
+// Recruitment Stats for Dashboard
+export const mockRecruitmentStats = [
+  { label: '在招岗位', value: '12', change: 8.3, iconKey: 'briefcase', color: 'bg-sky-500/10' },
+  { label: '候选人总数', value: '256', change: 12.5, iconKey: 'users', color: 'bg-violet-500/10' },
+  { label: '本周面试', value: '18', change: -3.2, iconKey: 'calendar', color: 'bg-emerald-500/10' },
+  { label: '待审批Offer', value: '3', change: 0, iconKey: 'filecheck', color: 'bg-amber-500/10' },
+  { label: '本月入职', value: '5', change: 25, iconKey: 'trendingup', color: 'bg-orange-500/10' },
+  { label: '平均招聘周期', value: '23天', change: -5.1, iconKey: 'clock', color: 'bg-pink-500/10' },
+];
+
+export const mockRecruitmentFunnel = [
+  { label: '简历收集', value: 256, color: 'bg-gradient-to-r from-sky-500 to-sky-400' },
+  { label: 'AI筛选通过', value: 98, color: 'bg-gradient-to-r from-violet-500 to-violet-400' },
+  { label: '面试安排', value: 68, color: 'bg-gradient-to-r from-blue-500 to-blue-400' },
+  { label: 'Offer发放', value: 22, color: 'bg-gradient-to-r from-orange-500 to-orange-400' },
+  { label: '成功入职', value: 12, color: 'bg-gradient-to-r from-emerald-500 to-emerald-400' },
+];
+
+export const mockDepartmentStats = [
+  { name: '技术部', active: 5, hired: 3, target: 6 },
+  { name: '产品部', active: 3, hired: 1, target: 3 },
+  { name: '设计部', active: 2, hired: 1, target: 2 },
+  { name: '数据部', active: 2, hired: 0, target: 3 },
+];
+
+export const mockWeeklyTrend = [
+  { week: 'W1', interviews: 12 },
+  { week: 'W2', interviews: 18 },
+  { week: 'W3', interviews: 15 },
+  { week: 'W4', interviews: 22 },
+  { week: 'W5', interviews: 19 },
+  { week: 'W6', interviews: 25 },
+  { week: 'W7', interviews: 21 },
+  { week: 'W8', interviews: 28 },
+];
+
+export const mockRecentCandidates = mockCandidates.slice(0, 5).map((c, i) => ({
+  ...c,
+  avatarColor: ['bg-gradient-to-br from-sky-500/20 to-blue-600/20 text-sky-400 border border-sky-500/20',
+    'bg-gradient-to-br from-violet-500/20 to-purple-600/20 text-violet-400 border border-violet-500/20',
+    'bg-gradient-to-br from-emerald-500/20 to-green-600/20 text-emerald-400 border border-emerald-500/20',
+    'bg-gradient-to-br from-orange-500/20 to-amber-600/20 text-orange-400 border border-orange-500/20',
+    'bg-gradient-to-br from-pink-500/20 to-rose-600/20 text-pink-400 border border-pink-500/20'][i % 5],
+}));
+
+export const mockUpcomingInterviews = mockInterviews.filter(i => i.status === 'scheduled').slice(0, 5);
+
+export const mockParsedResume = {
+  name: '赵子龙',
+  avatar: 'ZZ',
+  position: '高级前端工程师',
+  education: '硕士',
+  school: '清华大学',
+  major: '软件工程',
+  experience: 6,
+  matchScore: 94,
+  workHistory: [
+    { company: '美团', position: '前端架构师', duration: '2021-2024', description: '' },
+    { company: '京东', position: '高级前端工程师', duration: '2018-2021', description: '' },
+  ],
+  aiSummary: '候选人拥有6年前端开发经验，在大型互联网公司担任过前端架构师，技术栈与岗位需求高度匹配。在性能优化、工程化和团队管理方面有丰富经验，强烈推荐进入面试环节。',
+  matchedSkills: ['React', 'TypeScript', 'Next.js', 'Node.js', 'Webpack', '性能优化'],
+  unmatchedSkills: ['Vue.js'],
 };

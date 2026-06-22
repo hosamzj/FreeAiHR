@@ -9,6 +9,7 @@ import {
   FileCheck,
   Sparkles,
   ChevronRight,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -21,30 +22,44 @@ const navItems = [
 ];
 
 export function Sidebar() {
-  const { activeModule, setActiveModule } = useAppContext();
+  const { activeModule, setActiveModule, setMobileDrawerOpen } = useAppContext();
+
+  const handleNav = (id: string) => {
+    setActiveModule(id);
+    setMobileDrawerOpen(false);
+  };
 
   return (
-    <aside className="flex w-60 flex-col border-r border-[#1e293b] bg-[#0d1321]">
+    <aside className="flex h-full w-60 flex-col border-r border-[#1e293b] bg-[#0d1321]">
       {/* Logo */}
-      <div className="flex h-16 items-center gap-3 border-b border-[#1e293b] px-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 shadow-lg shadow-sky-500/20">
-          <Sparkles className="h-5 w-5 text-white" />
+      <div className="flex h-14 items-center justify-between border-b border-[#1e293b] px-4 md:h-16 md:px-5">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 shadow-lg shadow-sky-500/20 md:h-9 md:w-9">
+            <Sparkles className="h-4 w-4 text-white md:h-5 md:w-5" />
+          </div>
+          <div>
+            <h1 className="text-sm font-semibold text-white">AI 招聘系统</h1>
+            <p className="hidden text-[10px] text-slate-500 md:block">Intelligent Recruitment</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-sm font-semibold text-white">AI 招聘系统</h1>
-          <p className="text-[10px] text-slate-500">Intelligent Recruitment</p>
-        </div>
+        {/* Close button for mobile drawer */}
+        <button
+          onClick={() => setMobileDrawerOpen(false)}
+          className="rounded-lg p-1.5 text-slate-400 hover:bg-[#1a2236] hover:text-white md:hidden"
+        >
+          <X className="h-5 w-5" />
+        </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 p-3">
+      <nav className="flex-1 space-y-0.5 p-2.5 md:space-y-1 md:p-3">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeModule === item.id;
           return (
             <button
               key={item.id}
-              onClick={() => setActiveModule(item.id)}
+              onClick={() => handleNav(item.id)}
               className={cn(
                 'group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-200',
                 isActive
@@ -60,8 +75,8 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* AI Status */}
-      <div className="border-t border-[#1e293b] p-4">
+      {/* AI Status - hidden on mobile drawer for space */}
+      <div className="hidden border-t border-[#1e293b] p-4 md:block">
         <div className="rounded-lg bg-gradient-to-r from-sky-500/5 to-orange-500/5 p-3">
           <div className="flex items-center gap-2">
             <div className="relative">
