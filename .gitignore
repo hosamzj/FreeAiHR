@@ -159,3 +159,5 @@ Desktop.ini
 *.tsbuildinfo
 # Misc
 .coze-logs
+
+/src/generated/prisma

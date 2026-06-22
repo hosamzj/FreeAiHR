@@ -1,0 +1,248 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  phone         String?   @unique
+  password      String
+  name          String
+  avatar        String?
+  role          String    @default("interviewer") // admin, hr_manager, interviewer, candidate
+  department    String?
+  position      String?
+  status        String    @default("active") // active, disabled
+  passwordChangedAt DateTime?
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  interviews    Interview[]     @relation("Interviewer")
+  evaluations   InterviewEvaluation[]
+  offers        Offer[]         @relation("Creator")
+  auditLogs     AuditLog[]
+  smsCodes      SmsCode[]
+}
+
+model SmsCode {
+  id        String   @id @default(cuid())
+  phone     String
+  code      String
+  used      Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+}
+
+model Candidate {
+  id              String   @id @default(cuid())
+  name            String
+  email           String?
+  phone           String?
+  avatar          String?
+  education       String?
+  school          String?
+  major           String?
+  graduationYear  Int?
+  experience      Int?     // years
+  currentCompany  String?
+  currentPosition String?
+  skills          String   @default("[]") // JSON array
+  resumeUrl       String?
+  resumeParsed    String   @default("{}") // JSON parsed data
+  source          String   @default("manual") // manual, referral, channel
+  status          String   @default("new") // new, screening, interviewing, offered, hired, rejected, archived
+  matchScore      Int?
+  tags            String   @default("[]") // JSON array
+  aiSummary       String?
+  appliedPosition String?
+  department      String?
+  userId          String?  // Link to candidate portal account
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  interviews      Interview[]
+  applications    Application[]
+  feedbacks       CandidateFeedback[]
+  offers          Offer[]
+}
+
+model JobPosition {
+  id            String   @id @default(cuid())
+  title         String
+  department    String
+  location      String?
+  type          String   @default("full_time") // full_time, part_time, intern
+  status        String   @default("open") // open, closed, paused
+  description   String?
+  requirements  String?  // JSON
+  salaryMin     Int?
+  salaryMax     Int?
+  headcount     Int      @default(1)
+  channels      String   @default("[]") // JSON array of channels
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  candidates    Application[]
+  interviews    Interview[]
+}
+
+model Application {
+  id            String   @id @default(cuid())
+  candidateId   String
+  positionId    String
+  status        String   @default("applied") // applied, screening, interview, offer, hired, rejected
+  source        String   @default("direct")
+  matchScore    Int?
+  aiAnalysis    String?  // JSON
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  candidate     Candidate    @relation(fields: [candidateId], references: [id])
+  position      JobPosition  @relation(fields: [positionId], references: [id])
+
+  @@unique([candidateId, positionId])
+}
+
+model Interview {
+  id              String   @id @default(cuid())
+  candidateId     String
+  positionId      String?
+  interviewerId   String
+  type            String   @default("first") // first, second, final, technical
+  status          String   @default("scheduled") // scheduled, completed, cancelled
+  scheduledAt     DateTime
+  duration        Int      @default(60) // minutes
+  location        String?  // physical room or video link
+  notes           String?
+  checkInCode     String?  // QR code check-in
+  checkInAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  candidate       Candidate   @relation(fields: [candidateId], references: [id])
+  position        JobPosition? @relation(fields: [positionId], references: [id])
+  interviewer     User        @relation("Interviewer", fields: [interviewerId], references: [id])
+  evaluations     InterviewEvaluation[]
+}
+
+model InterviewEvaluation {
+  id              String   @id @default(cuid())
+  interviewId     String
+  evaluatorId     String
+  technicalScore  Int?     // 1-5
+  communicationScore Int?  // 1-5
+  cultureScore    Int?     // 1-5
+  overallScore    Int?     // 1-5
+  strengths       String?
+  weaknesses      String?
+  recommendation  String?  // hire, no_hire, maybe
+  comments        String?
+  aiSuggestion    String?  // AI generated suggestion
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  interview       Interview @relation(fields: [interviewId], references: [id])
+  evaluator       User      @relation(fields: [evaluatorId], references: [id])
+}
+
+model CandidateFeedback {
+  id            String   @id @default(cuid())
+  candidateId   String
+  interviewId   String?
+  rating        Int      // 1-5
+  comments      String?
+  createdAt     DateTime @default(now())
+
+  candidate     Candidate @relation(fields: [candidateId], references: [id])
+}
+
+model Offer {
+  id              String   @id @default(cuid())
+  candidateId     String
+  positionId      String?
+  creatorId       String
+  status          String   @default("draft") // draft, pending_approval, approved, sent, accepted, rejected
+  salaryBase      Int?
+  salaryBonus     Int?
+  salaryStock     Int?
+  startDate       DateTime?
+  benefits        String?  // JSON
+  approvalNotes   String?
+  approvedBy      String?
+  approvedAt      DateTime?
+  aiSuggestion    String?  // AI generated suggestion
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  candidate       Candidate @relation(fields: [candidateId], references: [id])
+  creator         User      @relation("Creator", fields: [creatorId], references: [id])
+}
+
+model SSOConfig {
+  id            String   @id @default(cuid())
+  enabled       Boolean  @default(false)
+  protocol      String   @default("saml") // saml, oidc
+  idpUrl        String?
+  idpCert       String?
+  entityId      String?
+  clientId      String?
+  clientSecret  String?
+  callbackUrl   String?
+  autoProvision Boolean  @default(true)
+  defaultRole   String   @default("interviewer")
+  updatedAt     DateTime @updatedAt
+}
+
+model PasswordPolicy {
+  id              String   @id @default(cuid())
+  minLength       Int      @default(8)
+  requireUppercase Boolean @default(true)
+  requireLowercase Boolean @default(true)
+  requireNumbers   Boolean @default(true)
+  requireSpecial   Boolean @default(true)
+  expiryDays      Int      @default(90)
+  historyCount    Int      @default(5)
+  updatedAt       DateTime @updatedAt
+}
+
+model SystemConfig {
+  id              String   @id @default(cuid())
+  key             String   @unique
+  value           String
+  updatedAt       DateTime @updatedAt
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String
+  action      String   // create, update, delete, login, logout, etc.
+  resource    String?  // user, candidate, interview, etc.
+  resourceId  String?
+  details     String?  // JSON
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String   // reminder, approval, interview, system
+  title       String
+  content     String?
+  read        Boolean  @default(false)
+  link        String?
+  createdAt   DateTime @default(now())
+}
