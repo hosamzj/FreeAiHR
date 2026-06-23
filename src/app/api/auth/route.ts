@@ -1,14 +1,13 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
   comparePassword,
   generateToken,
-  setTokenCookie,
+  hashPassword,
+  validatePassword,
   success,
   unauthorized,
   badRequest,
-  hashPassword,
-  validatePassword,
 } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
 
@@ -45,12 +44,19 @@ export async function POST(request: NextRequest) {
       const expiryDays = policy?.expiryDays ?? 90;
       if (daysSinceChange > expiryDays) {
         const token = generateToken({ userId: user.id, email: user.email, role: user.role, name: user.name });
-        await setTokenCookie(token);
-        return success({
+        const response = NextResponse.json(success({
           needPasswordChange: true,
           reason: `密码已${daysSinceChange}天未修改，请修改密码后继续使用`,
           user: { id: user.id, email: user.email, name: user.name, role: user.role },
+        }));
+        response.cookies.set('auth_token', token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: 60 * 60 * 24, // 24 hours
+          path: '/',
         });
+        return response;
       }
     }
 
@@ -61,23 +67,41 @@ export async function POST(request: NextRequest) {
     });
 
     const token = generateToken({ userId: user.id, email: user.email, role: user.role, name: user.name });
-    await setTokenCookie(token);
+    
+    // Log audit (ignore errors)
+    try {
+      await logAudit({
+        userId: user.id,
+        action: 'login',
+        resource: 'auth',
+        ipAddress: request.headers.get('x-forwarded-for') || undefined,
+        userAgent: request.headers.get('user-agent') || undefined,
+      });
+    } catch {
+      // Ignore audit log errors
+    }
 
-    await logAudit({
-      userId: user.id,
-      action: 'login',
-      resource: 'auth',
-      ipAddress: request.headers.get('x-forwarded-for') || undefined,
-      userAgent: request.headers.get('user-agent') || undefined,
-    });
-
-    return success({
+    const responseData = {
       needPasswordChange: false,
       user: { id: user.id, email: user.email, name: user.name, role: user.role, avatar: user.avatar },
+    };
+    console.log('Login success, response data:', JSON.stringify(responseData));
+    
+    const response = NextResponse.json({ code: 0, data: responseData, message: 'success' });
+    
+    response.cookies.set('auth_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24, // 24 hours
+      path: '/',
     });
+    
+    return response;
   } catch (err) {
     console.error('Login error:', err);
-    return badRequest('登录失败，请重试');
+    console.error('Error stack:', (err as Error).stack);
+    return badRequest(`登录失败: ${(err as Error).message}`);
   }
 }
 
