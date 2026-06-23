@@ -55,32 +55,56 @@ export default function ResumesPage() {
         const data = await res.json();
         if (data.code === 0 && data.data?.candidates && data.data.candidates.length > 0) {
           // Transform database candidates to match UI format
-          const transformed = data.data.candidates.map((c: Record<string, unknown>) => ({
-            id: c.id as string,
-            name: c.name as string,
-            avatar: (c.name as string).charAt(0),
-            email: c.email as string | null,
-            phone: c.phone as string | null,
-            gender: (c.gender as string) || 'male',
-            age: 25 + (c.experience as number || 0),
-            education: c.education as string,
-            school: c.school as string || '',
-            major: c.major as string || '',
-            experience: c.experience as number || 0,
-            currentCompany: c.currentCompany as string || '',
-            currentPosition: c.currentPosition as string || '',
-            skills: typeof c.skills === 'string' ? JSON.parse(c.skills) : (c.skills as string[]) || [],
-            location: c.location as string || '',
-            expectedSalary: c.expectedSalary as string || '',
-            status: c.status as CandidateStatus || 'new',
-            matchScore: c.matchScore as number || 75,
-            source: c.source as string || 'channel',
-            appliedPosition: c.appliedPosition as (string | null) || '',
-            department: c.department as (string | null) || '',
-            aiSummary: c.aiSummary as (string | null) || '',
-            tags: typeof c.tags === 'string' ? JSON.parse(c.tags) : (c.tags as string[]) || [],
-            appliedAt: (c.createdAt as string)?.split('T')[0] || new Date().toISOString().split('T')[0],
-          }));
+          const transformed = data.data.candidates.map((c: Record<string, unknown>) => {
+            // Parse JSON fields safely
+            const parseJsonArray = (val: unknown): string[] => {
+              if (Array.isArray(val)) return val;
+              if (typeof val === 'string' && val) {
+                try { return JSON.parse(val); } catch { return []; }
+              }
+              return [];
+            };
+            const parseWorkHistory = (val: unknown): { company: string; position: string; duration: string }[] => {
+              if (Array.isArray(val)) return val;
+              if (typeof val === 'string' && val) {
+                try { return JSON.parse(val); } catch { return []; }
+              }
+              return [];
+            };
+
+            const skills = parseJsonArray(c.skills);
+            const tags = parseJsonArray(c.tags);
+            const workHistory = parseWorkHistory(c.workHistory);
+            const experience = typeof c.experience === 'number' ? c.experience : 0;
+
+            return {
+              id: c.id as string,
+              name: (c.name as string) || '未知候选人',
+              avatar: ((c.name as string) || '未').charAt(0),
+              email: (c.email as string) || '',
+              phone: (c.phone as string) || '',
+              gender: (c.gender as string) || 'male',
+              age: 25 + experience,
+              education: (c.education as string) || '未知',
+              school: (c.school as string) || '',
+              major: (c.major as string) || '',
+              experience,
+              currentCompany: (c.currentCompany as string) || '',
+              currentPosition: (c.currentPosition as string) || '',
+              skills,
+              location: (c.location as string) || '',
+              expectedSalary: (c.expectedSalary as string) || '',
+              status: (c.status as CandidateStatus) || 'new',
+              matchScore: typeof c.matchScore === 'number' ? c.matchScore : 75,
+              source: (c.source as string) || 'channel',
+              appliedPosition: (c.appliedPosition as string) || '',
+              department: (c.department as string) || '',
+              aiSummary: (c.aiSummary as string) || '',
+              tags,
+              workHistory,
+              appliedAt: (c.createdAt as string)?.split('T')[0] || new Date().toISOString().split('T')[0],
+            };
+          });
           setCandidates(transformed);
         }
       } catch (error) {
@@ -392,7 +416,7 @@ export default function ResumesPage() {
                 </div>
                 <div className="flex items-center gap-2 text-slate-400">
                   <Building2 className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                  <span className="truncate">{parsedResult.workHistory.map(w => w.company).join(' → ')}</span>
+                  <span className="truncate">{(parsedResult.workHistory || []).map(w => w.company).join(' → ') || '暂无工作经历'}</span>
                 </div>
               </div>
               <div className="mt-3 flex items-center gap-2">
@@ -548,14 +572,14 @@ export default function ResumesPage() {
 
               {/* Skills */}
               <div className="mt-2.5 md:mt-3 flex flex-wrap gap-1 md:gap-1.5">
-                {candidate.skills.slice(0, 4).map((skill) => (
+                {(candidate.skills || []).slice(0, 4).map((skill) => (
                   <span key={skill} className="rounded-md bg-[#0a0e1a] px-1.5 md:px-2 py-0.5 text-[10px] md:text-[11px] text-slate-400 border border-[#1e293b]">
                     {skill}
                   </span>
                 ))}
-                {candidate.skills.length > 4 && (
+                {(candidate.skills || []).length > 4 && (
                   <span className="rounded-md bg-[#0a0e1a] px-1.5 md:px-2 py-0.5 text-[10px] md:text-[11px] text-slate-500">
-                    +{candidate.skills.length - 4}
+                    +{(candidate.skills || []).length - 4}
                   </span>
                 )}
               </div>
@@ -571,7 +595,7 @@ export default function ResumesPage() {
                 <div>
                   <p className="text-[11px] md:text-xs font-medium text-slate-400 mb-1.5">工作经历</p>
                   <div className="space-y-2">
-                    {candidate.workHistory.map((work, i) => (
+                    {(candidate.workHistory || []).map((work, i) => (
                       <div key={i} className="flex items-start gap-2">
                         <div className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500/50" />
                         <div>
