@@ -141,13 +141,39 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Demo accounts */}
+        {/* Demo accounts - clickable */}
         <div className="mt-6 p-4 bg-[#111827]/50 border border-slate-800 rounded-xl">
-          <p className="text-xs text-slate-500 mb-2">演示账号：</p>
-          <div className="space-y-1 text-xs text-slate-400">
-            <p>管理员：admin@recruit.ai / Admin@123</p>
-            <p>HR经理：hr@recruit.ai / Hr@12345</p>
-            <p>面试官：interviewer@recruit.ai / Test@1234</p>
+          <p className="text-xs text-slate-500 mb-3 flex items-center gap-1">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />
+            演示账号（点击自动填入）
+          </p>
+          <div className="space-y-2">
+            {[
+              { role: '管理员', email: 'admin@recruit.ai', password: 'Admin@123', color: 'sky' },
+              { role: 'HR经理', email: 'hr@recruit.ai', password: 'Hr@12345', color: 'orange' },
+              { role: '面试官', email: 'interviewer@recruit.ai', password: 'Test@1234', color: 'emerald' },
+            ].map((account) => (
+              <button
+                key={account.email}
+                type="button"
+                onClick={() => {
+                  setEmail(account.email);
+                  setPassword(account.password);
+                }}
+                className={`w-full flex items-center gap-3 p-2.5 rounded-lg bg-[#0a0e1a]/50 border border-slate-800 hover:border-${account.color}-500/30 hover:bg-${account.color}-500/5 transition-all text-left group`}
+              >
+                <span className={`w-8 h-8 rounded-lg bg-${account.color}-500/10 border border-${account.color}-500/20 flex items-center justify-center text-${account.color}-400 text-xs font-medium group-hover:scale-105 transition-transform`}>
+                  {account.role.charAt(0)}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-slate-300 font-medium">{account.role}</p>
+                  <p className="text-xs text-slate-500 truncate">{account.email}</p>
+                </div>
+                <span className="text-xs text-slate-600 group-hover:text-slate-400 transition-colors">
+                  点击填入
+                </span>
+              </button>
+            ))}
           </div>
         </div>
       </div>
