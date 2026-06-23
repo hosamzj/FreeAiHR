@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   Search,
   Filter,
@@ -46,6 +46,49 @@ export default function ResumesPage() {
   const [candidates, setCandidates] = useState(mockCandidates);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch candidates from database on mount
+  useEffect(() => {
+    const fetchCandidates = async () => {
+      try {
+        const res = await fetch('/api/candidates');
+        const data = await res.json();
+        if (data.code === 0 && data.data?.candidates && data.data.candidates.length > 0) {
+          // Transform database candidates to match UI format
+          const transformed = data.data.candidates.map((c: Record<string, unknown>) => ({
+            id: c.id as string,
+            name: c.name as string,
+            avatar: (c.name as string).charAt(0),
+            email: c.email as string | null,
+            phone: c.phone as string | null,
+            gender: (c.gender as string) || 'male',
+            age: 25 + (c.experience as number || 0),
+            education: c.education as string,
+            school: c.school as string || '',
+            major: c.major as string || '',
+            experience: c.experience as number || 0,
+            currentCompany: c.currentCompany as string || '',
+            currentPosition: c.currentPosition as string || '',
+            skills: typeof c.skills === 'string' ? JSON.parse(c.skills) : (c.skills as string[]) || [],
+            location: c.location as string || '',
+            expectedSalary: c.expectedSalary as string || '',
+            status: c.status as CandidateStatus || 'new',
+            matchScore: c.matchScore as number || 75,
+            source: c.source as string || 'channel',
+            appliedPosition: c.appliedPosition as (string | null) || '',
+            department: c.department as (string | null) || '',
+            aiSummary: c.aiSummary as (string | null) || '',
+            tags: typeof c.tags === 'string' ? JSON.parse(c.tags) : (c.tags as string[]) || [],
+            appliedAt: (c.createdAt as string)?.split('T')[0] || new Date().toISOString().split('T')[0],
+          }));
+          setCandidates(transformed);
+        }
+      } catch (error) {
+        console.error('Failed to fetch candidates:', error);
+      }
+    };
+    fetchCandidates();
+  }, []);
 
   // Compute dynamic tab counts from candidates state
   const tabCounts = {
