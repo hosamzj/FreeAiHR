@@ -149,9 +149,9 @@ export default function LoginPage() {
           </p>
           <div className="space-y-2">
             {[
-              { role: '管理员', email: 'admin@recruit.ai', password: 'Admin@123', color: 'sky' },
-              { role: 'HR经理', email: 'hr@recruit.ai', password: 'Hr@12345', color: 'orange' },
-              { role: '面试官', email: 'interviewer@recruit.ai', password: 'Test@1234', color: 'emerald' },
+              { role: '管理员', email: 'admin@recruit.ai', password: 'Admin@123', color: 'sky', hoverBorder: 'hover:border-sky-500/30', hoverBg: 'hover:bg-sky-500/5', iconBg: 'bg-sky-500/10', iconBorder: 'border-sky-500/20', iconText: 'text-sky-400' },
+              { role: 'HR经理', email: 'hr@recruit.ai', password: 'Hr@12345', color: 'orange', hoverBorder: 'hover:border-orange-500/30', hoverBg: 'hover:bg-orange-500/5', iconBg: 'bg-orange-500/10', iconBorder: 'border-orange-500/20', iconText: 'text-orange-400' },
+              { role: '面试官', email: 'interviewer@recruit.ai', password: 'Test@1234', color: 'emerald', hoverBorder: 'hover:border-emerald-500/30', hoverBg: 'hover:bg-emerald-500/5', iconBg: 'bg-emerald-500/10', iconBorder: 'border-emerald-500/20', iconText: 'text-emerald-400' },
             ].map((account) => (
               <button
                 key={account.email}
@@ -160,9 +160,9 @@ export default function LoginPage() {
                   setEmail(account.email);
                   setPassword(account.password);
                 }}
-                className={`w-full flex items-center gap-3 p-2.5 rounded-lg bg-[#0a0e1a]/50 border border-slate-800 hover:border-${account.color}-500/30 hover:bg-${account.color}-500/5 transition-all text-left group`}
+                className={`w-full flex items-center gap-3 p-2.5 rounded-lg bg-[#0a0e1a]/50 border border-slate-800 ${account.hoverBorder} ${account.hoverBg} transition-all text-left group`}
               >
-                <span className={`w-8 h-8 rounded-lg bg-${account.color}-500/10 border border-${account.color}-500/20 flex items-center justify-center text-${account.color}-400 text-xs font-medium group-hover:scale-105 transition-transform`}>
+                <span className={`w-8 h-8 rounded-lg ${account.iconBg} border ${account.iconBorder} flex items-center justify-center ${account.iconText} text-xs font-medium group-hover:scale-105 transition-transform`}>
                   {account.role.charAt(0)}
                 </span>
                 <div className="flex-1 min-w-0">
