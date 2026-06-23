@@ -26,6 +26,7 @@ import {
 import { cn } from '@/lib/utils';
 import { mockCandidates, mockParsedResume } from '@/lib/mock-data';
 import { Modal } from '@/components/ui/modal';
+import { ResumePreviewModal } from '@/components/resume-preview-modal';
 
 type CandidateStatus = 'new' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected';
 type TabType = 'all' | CandidateStatus;
@@ -45,6 +46,8 @@ export default function ResumesPage() {
   const [selectedCandidate, setSelectedCandidate] = useState<string | null>(null);
   const [candidates, setCandidates] = useState(mockCandidates);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [showResumePreview, setShowResumePreview] = useState(false);
+  const [resumePreviewData, setResumePreviewData] = useState<{ id: string; name: string; position?: string; resumeUrl?: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch candidates from database on mount
@@ -607,6 +610,23 @@ export default function ResumesPage() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2 pt-1">
+                  {/* 查看简历按钮 */}
+                  <button
+                    onClick={() => {
+                      setResumePreviewData({
+                        id: candidate.id,
+                        name: candidate.name,
+                        position: candidate.position,
+                        resumeUrl: candidate.resumeUrl,
+                      });
+                      setShowResumePreview(true);
+                    }}
+                    className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-sky-500/20 px-2.5 md:px-3 text-[11px] md:text-xs text-sky-400 hover:bg-sky-500/10 cursor-pointer transition-colors"
+                  >
+                    <FileText className="h-3 w-3" />
+                    {candidate.resumeUrl ? '查看简历' : '上传简历'}
+                  </button>
+
                   {/* 新简历 → 通过筛选、淘汰 */}
                   {candidate.status === 'new' && (
                     <>
@@ -1013,6 +1033,82 @@ export default function ResumesPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Resume Preview Modal */}
+      {resumePreviewData && (
+        <ResumePreviewModal
+          isOpen={showResumePreview}
+          onClose={() => {
+            setShowResumePreview(false);
+            setResumePreviewData(null);
+          }}
+          candidateId={resumePreviewData.id}
+          candidateName={resumePreviewData.name}
+          candidatePosition={resumePreviewData.position}
+          resumeUrl={resumePreviewData.resumeUrl}
+          onUploadSuccess={() => {
+            // Refresh candidates data after upload
+            fetch('/api/candidates')
+              .then(res => res.json())
+              .then(data => {
+                if (data.code === 0 && data.data?.candidates) {
+                  const transformed = data.data.candidates.map((c: Record<string, unknown>) => {
+                    const parseJsonArray = (val: unknown): string[] => {
+                      if (Array.isArray(val)) return val;
+                      if (typeof val === 'string' && val) {
+                        try { return JSON.parse(val); } catch { return []; }
+                      }
+                      return [];
+                    };
+                    const parseWorkHistory = (val: unknown): { company: string; position: string; duration: string }[] => {
+                      if (Array.isArray(val)) return val;
+                      if (typeof val === 'string' && val) {
+                        try { return JSON.parse(val); } catch { return []; }
+                      }
+                      return [];
+                    };
+                    return {
+                      id: c.id as string,
+                      name: (c.name as string) || '未知候选人',
+                      avatar: (c.avatar as string) || (c.name as string)?.charAt(0) || '?',
+                      email: (c.email as string) || '',
+                      phone: (c.phone as string) || '',
+                      education: (c.education as string) || '未知',
+                      school: (c.school as string) || '',
+                      major: (c.major as string) || '',
+                      experience: (typeof c.experience === 'number' ? c.experience : 0) as number,
+                      currentCompany: (c.currentCompany as string) || '',
+                      currentPosition: (c.currentPosition as string) || '',
+                      skills: parseJsonArray(c.skills),
+                      location: (c.location as string) || '',
+                      expectedSalary: (c.expectedSalary as string) || '',
+                      source: (c.source as string) || 'manual',
+                      matchScore: (typeof c.matchScore === 'number' ? c.matchScore : 75) as number,
+                      aiSummary: (c.aiSummary as string) || '',
+                      appliedPosition: (c.appliedPosition as string) || '',
+                      tags: parseJsonArray(c.tags),
+                      status: (c.status as 'new' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected') || 'new',
+                      workHistory: parseWorkHistory(c.workHistory),
+                      resumeUrl: (c.resumeUrl as string) || undefined,
+                    };
+                  });
+                  setCandidates(transformed);
+                  // Update resume preview data
+                  const updatedCandidate = transformed.find((c: { id: string }) => c.id === resumePreviewData.id);
+                  if (updatedCandidate) {
+                    setResumePreviewData({
+                      id: updatedCandidate.id,
+                      name: updatedCandidate.name,
+                      position: updatedCandidate.appliedPosition,
+                      resumeUrl: updatedCandidate.resumeUrl,
+                    });
+                  }
+                }
+              })
+              .catch(console.error);
+          }}
+        />
+      )}
     </div>
   );
 }

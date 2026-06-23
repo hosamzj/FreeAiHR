@@ -7,9 +7,9 @@ import { useEffect } from 'react';
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
-  title: string;
+  title: string | React.ReactNode;
   children: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
 export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalProps) {
@@ -39,7 +39,8 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalPr
         'relative w-full rounded-xl border border-[#1e293b] bg-[#111827] shadow-2xl',
         size === 'sm' && 'max-w-sm',
         size === 'md' && 'max-w-lg',
-        size === 'lg' && 'max-w-2xl'
+        size === 'lg' && 'max-w-2xl',
+        size === 'xl' && 'max-w-4xl'
       )}>
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#1e293b] px-5 py-4">
