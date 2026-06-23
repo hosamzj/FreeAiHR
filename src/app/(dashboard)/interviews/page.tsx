@@ -22,12 +22,16 @@ import { mockInterviews, mockInterviewers } from '@/lib/mock-data';
 type ViewMode = 'calendar' | 'list';
 
 const typeColors = {
+  first: { bg: 'bg-sky-500/10', text: 'text-sky-400', border: 'border-sky-500/20' },
+  second: { bg: 'bg-cyan-500/10', text: 'text-cyan-400', border: 'border-cyan-500/20' },
   technical: { bg: 'bg-sky-500/10', text: 'text-sky-400', border: 'border-sky-500/20' },
   hr: { bg: 'bg-violet-500/10', text: 'text-violet-400', border: 'border-violet-500/20' },
   final: { bg: 'bg-orange-500/10', text: 'text-orange-400', border: 'border-orange-500/20' },
 };
 
 const typeLabels = {
+  first: '初面',
+  second: '复面',
   technical: '技术面',
   hr: 'HR面',
   final: '终面',
