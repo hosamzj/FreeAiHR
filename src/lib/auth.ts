@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
@@ -68,6 +68,12 @@ export function verifyToken(token: string): JWTPayload | null {
 
 // Cookie helpers
 export async function getToken(): Promise<string | null> {
+  // First check for Authorization header (useful for API testing)
+  const headersList = await headers();
+  const authHeader = headersList.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    return authHeader.slice(7);
+  }
   const cookieStore = await cookies();
   return cookieStore.get('auth_token')?.value || null;
 }

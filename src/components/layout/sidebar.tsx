@@ -14,6 +14,7 @@ import {
   X,
   Users,
   Settings,
+  Download,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -28,6 +29,7 @@ interface NavItem {
 const allNavItems: NavItem[] = [
   { id: 'dashboard', label: '招聘看板', icon: LayoutDashboard, href: '/dashboard', roles: ['admin', 'hr_manager'] },
   { id: 'resumes', label: '简历管理', icon: FileText, href: '/resumes', roles: ['admin', 'hr_manager'] },
+  { id: 'collection', label: '简历采集', icon: Download, href: '/collection', roles: ['admin', 'hr_manager'] },
   { id: 'interviews', label: '面试排期', icon: Calendar, href: '/interviews', roles: ['admin', 'hr_manager', 'interviewer'] },
   { id: 'analysis', label: '面试分析', icon: Brain, href: '/analysis', roles: ['admin', 'hr_manager'] },
   { id: 'offers', label: 'Offer管理', icon: FileCheck, href: '/offers', roles: ['admin', 'hr_manager'] },
