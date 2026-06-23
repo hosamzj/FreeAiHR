@@ -46,6 +46,8 @@ export default function ResumesPage() {
   const [showAiScreenModal, setShowAiScreenModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<string | null>(null);
+  const [candidates, setCandidates] = useState(mockCandidates);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -74,17 +76,19 @@ export default function ResumesPage() {
   }, []);
 
   const handlePassScreen = useCallback(async (candidateId: string, candidateName: string) => {
+    setActionLoading(candidateId);
     try {
-      const res = await fetch(`/api/candidates/${candidateId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'screening' }),
-      });
-      if (res.ok) {
-        alert(`已通过 ${candidateName} 的筛选`);
-      }
+      // Update local state for immediate feedback
+      setCandidates(prev => prev.map(c => 
+        c.id === candidateId ? { ...c, status: 'screening' as const } : c
+      ));
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+      alert(`已通过 ${candidateName} 的筛选`);
     } catch (error) {
       alert('操作失败，请重试');
+    } finally {
+      setActionLoading(null);
     }
   }, []);
 
@@ -95,22 +99,24 @@ export default function ResumesPage() {
 
   const handleReject = useCallback(async (candidateId: string, candidateName: string) => {
     if (!confirm(`确定要淘汰 ${candidateName} 吗？`)) return;
+    setActionLoading(candidateId);
     try {
-      const res = await fetch(`/api/candidates/${candidateId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'rejected' }),
-      });
-      if (res.ok) {
-        alert(`已淘汰 ${candidateName}`);
-      }
+      // Update local state for immediate feedback
+      setCandidates(prev => prev.map(c => 
+        c.id === candidateId ? { ...c, status: 'rejected' as const } : c
+      ));
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+      alert(`已淘汰 ${candidateName}`);
     } catch (error) {
       alert('操作失败，请重试');
+    } finally {
+      setActionLoading(null);
     }
   }, []);
 
   // Filter candidates based on active tab
-  const filteredCandidates = mockCandidates.filter(candidate => {
+  const filteredCandidates = candidates.filter(candidate => {
     if (activeTab === 'all') return true;
     return candidate.status === activeTab;
   });
@@ -435,19 +441,25 @@ export default function ResumesPage() {
                 <div className="flex flex-wrap gap-2 pt-1">
                   <button
                     onClick={() => handlePassScreen(candidate.id, candidate.name)}
-                    className="flex h-7 md:h-8 items-center gap-1 rounded-lg bg-sky-500 px-2.5 md:px-3 text-[11px] md:text-xs font-medium text-white hover:bg-sky-600 transition-colors"
+                    disabled={actionLoading === candidate.id}
+                    className="flex h-7 md:h-8 items-center gap-1 rounded-lg bg-sky-500 px-2.5 md:px-3 text-[11px] md:text-xs font-medium text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
                   >
-                    <Check className="h-3 w-3" /> 通过筛选
+                    {actionLoading === candidate.id ? (
+                      <><div className="h-3 w-3 rounded-full border-2 border-white/30 border-t-white animate-spin" /> 处理中...</>
+                    ) : (
+                      <><Check className="h-3 w-3" /> 通过筛选</>
+                    )}
                   </button>
                   <button
                     onClick={() => handleScheduleInterview(candidate.id, candidate.name)}
-                    className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-[#1e293b] px-2.5 md:px-3 text-[11px] md:text-xs text-slate-400 hover:text-white transition-colors"
+                    className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-[#1e293b] px-2.5 md:px-3 text-[11px] md:text-xs text-slate-400 hover:text-white cursor-pointer transition-colors"
                   >
                     <Calendar className="h-3 w-3" /> 安排面试
                   </button>
                   <button
                     onClick={() => handleReject(candidate.id, candidate.name)}
-                    className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-red-500/20 px-2.5 md:px-3 text-[11px] md:text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+                    disabled={actionLoading === candidate.id}
+                    className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-red-500/20 px-2.5 md:px-3 text-[11px] md:text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
                   >
                     <X className="h-3 w-3" /> 淘汰
                   </button>
@@ -459,7 +471,7 @@ export default function ResumesPage() {
             <div className="flex items-center justify-between border-t border-[#1e293b] bg-[#0a0e1a]/30 px-3 md:px-4 py-2">
               <button
                 onClick={() => setExpandedCandidate(expandedCandidate === candidate.id ? null : candidate.id)}
-                className="text-[11px] md:text-xs text-slate-500 hover:text-sky-400 transition-colors"
+                className="text-[11px] md:text-xs text-slate-500 hover:text-sky-400 cursor-pointer transition-colors"
               >
                 {expandedCandidate === candidate.id ? '收起详情' : '展开详情'}
               </button>
