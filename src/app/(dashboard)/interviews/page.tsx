@@ -52,6 +52,25 @@ interface CreateInterviewForm {
   scheduledAt: string;
   duration: number;
   location: string;
+  method: string;
+  notes: string;
+}
+
+interface CandidateOption {
+  id: string;
+  name: string;
+  appliedPosition: string;
+}
+
+interface InterviewerOption {
+  id: string;
+  name: string;
+  department: string;
+}
+
+interface InterviewMethodOption {
+  id: string;
+  name: string;
 }
 
 const typeColors = {
@@ -95,7 +114,15 @@ export default function InterviewsPage() {
     scheduledAt: '',
     duration: 60,
     location: '',
+    method: '',
+    notes: '',
   });
+
+  // Options for dropdowns
+  const [candidates, setCandidates] = useState<CandidateOption[]>([]);
+  const [interviewers, setInterviewers] = useState<InterviewerOption[]>([]);
+  const [interviewMethods, setInterviewMethods] = useState<InterviewMethodOption[]>([]);
+  const [loadingOptions, setLoadingOptions] = useState(false);
 
   // Fetch interviews from API
   const fetchInterviews = useCallback(async () => {
@@ -149,7 +176,16 @@ export default function InterviewsPage() {
       const res = await fetch('/api/interviews', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          candidateId: formData.candidateId,
+          interviewerId: formData.interviewerId,
+          type: formData.type,
+          scheduledAt: new Date(formData.scheduledAt).toISOString(),
+          duration: formData.duration,
+          location: formData.location,
+          method: formData.method,
+          notes: formData.notes,
+        }),
       });
 
       const data = await res.json();
@@ -163,6 +199,8 @@ export default function InterviewsPage() {
           scheduledAt: '',
           duration: 60,
           location: '',
+          method: '',
+          notes: '',
         });
         fetchInterviews();
       } else {
@@ -174,6 +212,55 @@ export default function InterviewsPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // Fetch options for dropdowns
+  const fetchOptions = async () => {
+    setLoadingOptions(true);
+    try {
+      // Fetch candidates with status screening or interview
+      const candidatesRes = await fetch('/api/candidates?status=screening,interview');
+      const candidatesData = await candidatesRes.json();
+      if (candidatesData.code === 0) {
+        setCandidates(
+          (candidatesData.data || []).map((c: { id: string; name: string; appliedPosition?: string; position?: string }) => ({
+            id: c.id,
+            name: c.name,
+            appliedPosition: c.appliedPosition || c.position || '未指定',
+          }))
+        );
+      }
+
+      // Fetch interviewers
+      const interviewersRes = await fetch('/api/users?role=interviewer');
+      const interviewersData = await interviewersRes.json();
+      if (interviewersData.code === 0) {
+        setInterviewers(
+          (interviewersData.data || []).map((u: { id: string; name: string; department?: string }) => ({
+            id: u.id,
+            name: u.name,
+            department: u.department || '未分配',
+          }))
+        );
+      }
+
+      // Fetch interview methods
+      const methodsRes = await fetch('/api/system/interview-methods');
+      const methodsData = await methodsRes.json();
+      if (methodsData.code === 0) {
+        setInterviewMethods(methodsData.data || []);
+      }
+    } catch (err) {
+      console.error('获取选项失败:', err);
+    } finally {
+      setLoadingOptions(false);
+    }
+  };
+
+  // Open create modal and fetch options
+  const openCreateModal = () => {
+    setShowCreateModal(true);
+    fetchOptions();
   };
 
   return (
@@ -220,7 +307,7 @@ export default function InterviewsPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={openCreateModal}
             className="flex h-9 items-center gap-1.5 rounded-lg bg-sky-500 px-3 text-xs md:text-sm font-medium text-white hover:bg-sky-600 transition-colors"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -486,91 +573,161 @@ export default function InterviewsPage() {
         size="md"
       >
         <div className="space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1.5">候选人 *</label>
-            <input
-              type="text"
-              value={formData.candidateId}
-              onChange={(e) => setFormData({ ...formData, candidateId: e.target.value })}
-              placeholder="输入候选人ID或姓名"
-              className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white placeholder-slate-600 focus:border-sky-500 focus:outline-none"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1.5">面试官 *</label>
-            <select
-              value={formData.interviewerId}
-              onChange={(e) => setFormData({ ...formData, interviewerId: e.target.value })}
-              className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
-            >
-              <option value="">选择面试官</option>
-              {mockInterviewers.map((i) => (
-                <option key={i.id} value={i.id}>{i.name} - {i.department}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1.5">面试类型</label>
-              <select
-                value={formData.type}
-                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
-              >
-                <option value="first">初面</option>
-                <option value="technical">技术面</option>
-                <option value="hr">HR面</option>
-                <option value="final">终面</option>
-              </select>
+          {loadingOptions ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-sky-400" />
+              <span className="ml-2 text-sm text-slate-400">加载选项...</span>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1.5">时长（分钟）</label>
-              <input
-                type="number"
-                value={formData.duration}
-                onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) || 60 })}
-                className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
-              />
-            </div>
-          </div>
+          ) : (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1.5">候选人 *</label>
+                <select
+                  value={formData.candidateId}
+                  onChange={(e) => setFormData({ ...formData, candidateId: e.target.value })}
+                  className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
+                >
+                  <option value="">选择候选人</option>
+                  {candidates.length === 0 ? (
+                    <option value="" disabled>暂无已筛选的候选人，请先在简历管理中筛选候选人</option>
+                  ) : (
+                    candidates.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name} - {c.appliedPosition}</option>
+                    ))
+                  )}
+                </select>
+              </div>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1.5">面试时间 *</label>
-            <input
-              type="datetime-local"
-              value={formData.scheduledAt}
-              onChange={(e) => setFormData({ ...formData, scheduledAt: e.target.value })}
-              className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
-            />
-          </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1.5">面试官 *</label>
+                <select
+                  value={formData.interviewerId}
+                  onChange={(e) => setFormData({ ...formData, interviewerId: e.target.value })}
+                  className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
+                >
+                  <option value="">选择面试官</option>
+                  {interviewers.length === 0 ? (
+                    <option value="" disabled>暂无面试官，请先在用户管理中添加</option>
+                  ) : (
+                    interviewers.map((i) => (
+                      <option key={i.id} value={i.id}>{i.name} - {i.department}</option>
+                    ))
+                  )}
+                </select>
+              </div>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1.5">面试地点/链接</label>
-            <input
-              type="text"
-              value={formData.location}
-              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-              placeholder="如：3楼会议室A / 腾讯会议链接"
-              className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white placeholder-slate-600 focus:border-sky-500 focus:outline-none"
-            />
-          </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1.5">面试方式 *</label>
+                <select
+                  value={formData.method}
+                  onChange={(e) => setFormData({ ...formData, method: e.target.value })}
+                  className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
+                >
+                  <option value="">选择面试方式</option>
+                  {interviewMethods.map((m) => (
+                    <option key={m.id} value={m.name}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-[#1e293b]">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1.5">面试类型</label>
+                  <select
+                    value={formData.type}
+                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                    className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
+                  >
+                    <option value="first">初面</option>
+                    <option value="technical">技术面</option>
+                    <option value="hr">HR面</option>
+                    <option value="final">终面</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1.5">时长（分钟）</label>
+                  <input
+                    type="number"
+                    value={formData.duration}
+                    onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) || 60 })}
+                    className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1.5">面试日期 *</label>
+                  <input
+                    type="date"
+                    value={formData.scheduledAt ? formData.scheduledAt.split('T')[0] : ''}
+                    onChange={(e) => {
+                      const date = e.target.value;
+                      const time = formData.scheduledAt ? formData.scheduledAt.split('T')[1]?.slice(0, 5) || '10:00' : '10:00';
+                      setFormData({ ...formData, scheduledAt: `${date}T${time}` });
+                    }}
+                    className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1.5">面试时间 *</label>
+                  <input
+                    type="time"
+                    value={formData.scheduledAt ? formData.scheduledAt.split('T')[1]?.slice(0, 5) || '' : ''}
+                    onChange={(e) => {
+                      const time = e.target.value;
+                      const date = formData.scheduledAt ? formData.scheduledAt.split('T')[0] : new Date().toISOString().split('T')[0];
+                      setFormData({ ...formData, scheduledAt: `${date}T${time}` });
+                    }}
+                    className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1.5">面试地点/链接</label>
+                <input
+                  type="text"
+                  value={formData.location}
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                  placeholder="如：3楼会议室A / 腾讯会议链接"
+                  className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white placeholder-slate-600 focus:border-sky-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1.5">备注</label>
+                <textarea
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder="面试注意事项、特殊要求等"
+                  rows={3}
+                  className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white placeholder-slate-600 focus:border-sky-500 focus:outline-none resize-none"
+                />
+              </div>
+            </>
+          )}
+
+          <div className="flex gap-3 pt-4 border-t border-[#1e293b]">
             <button
               onClick={() => setShowCreateModal(false)}
-              className="rounded-lg border border-[#1e293b] px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors"
+              className="flex-1 rounded-lg border border-[#1e293b] px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-[#1a2236] transition-colors"
             >
               取消
             </button>
             <button
               onClick={handleCreateInterview}
-              disabled={isSubmitting}
-              className="flex items-center gap-2 rounded-lg bg-sky-500 px-4 py-2 text-sm font-medium text-white hover:bg-sky-600 disabled:opacity-50 transition-colors"
+              disabled={isSubmitting || loadingOptions}
+              className="flex-1 rounded-lg bg-sky-500 px-4 py-2 text-sm font-medium text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
             >
-              {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-              {isSubmitting ? '创建中...' : '确认创建'}
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  创建中...
+                </>
+              ) : (
+                '创建面试'
+              )}
             </button>
           </div>
         </div>

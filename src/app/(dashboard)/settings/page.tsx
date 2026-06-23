@@ -4,11 +4,11 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import {
   Settings, Shield, Key, Building2, Save, Loader2, Check,
-  Globe, Lock, Mail, Download, Bot, AlertTriangle,
+  Globe, Lock, Mail, Download, Bot, AlertTriangle, Video, Plus, GripVertical, Trash2, Edit2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type TabId = 'sso' | 'password' | 'general' | 'collection';
+type TabId = 'sso' | 'password' | 'general' | 'collection' | 'interview_methods';
 
 interface SSOCfg {
   enabled: boolean;
@@ -55,6 +55,12 @@ interface CollectionCfg {
   rpa: RpaCfg;
 }
 
+interface InterviewMethod {
+  id: string;
+  name: string;
+  order: number;
+}
+
 export default function SettingsPage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabId>('sso');
@@ -85,13 +91,86 @@ export default function SettingsPage() {
     },
   });
 
+  // Interview methods state
+  const [interviewMethods, setInterviewMethods] = useState<InterviewMethod[]>([]);
+  const [newMethodName, setNewMethodName] = useState('');
+  const [editingMethodId, setEditingMethodId] = useState<string | null>(null);
+  const [editingMethodName, setEditingMethodName] = useState('');
+  const [loadingMethods, setLoadingMethods] = useState(false);
+
   useEffect(() => {
     if (user?.role !== 'admin') return;
     fetch('/api/system/sso').then(r => r.json()).then(d => { if (d.code === 0) setSso(d.data); });
     fetch('/api/system/password-policy').then(r => r.json()).then(d => { if (d.code === 0) setPwdPolicy(d.data); });
     fetch('/api/system/config').then(r => r.json()).then(d => { if (d.code === 0) setSysCfg(d.data); });
+    // Fetch interview methods
+    fetchInterviewMethods();
     // Collection config is stored locally for now
   }, [user]);
+
+  const fetchInterviewMethods = async () => {
+    setLoadingMethods(true);
+    try {
+      const res = await fetch('/api/system/interview-methods');
+      const data = await res.json();
+      if (data.code === 0) {
+        setInterviewMethods(data.data);
+      }
+    } catch (err) {
+      console.error('Fetch interview methods error:', err);
+    } finally {
+      setLoadingMethods(false);
+    }
+  };
+
+  const handleAddMethod = async () => {
+    if (!newMethodName.trim()) return;
+    try {
+      const res = await fetch('/api/system/interview-methods', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newMethodName.trim() }),
+      });
+      const data = await res.json();
+      if (data.code === 0) {
+        setInterviewMethods([...interviewMethods, data.data]);
+        setNewMethodName('');
+      }
+    } catch (err) {
+      console.error('Add method error:', err);
+    }
+  };
+
+  const handleDeleteMethod = async (id: string) => {
+    try {
+      const res = await fetch(`/api/system/interview-methods?id=${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.code === 0) {
+        setInterviewMethods(interviewMethods.filter(m => m.id !== id));
+      }
+    } catch (err) {
+      console.error('Delete method error:', err);
+    }
+  };
+
+  const handleUpdateMethod = async (id: string) => {
+    if (!editingMethodName.trim()) return;
+    try {
+      const res = await fetch('/api/system/interview-methods', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, name: editingMethodName.trim() }),
+      });
+      const data = await res.json();
+      if (data.code === 0) {
+        setInterviewMethods(data.data);
+        setEditingMethodId(null);
+        setEditingMethodName('');
+      }
+    } catch (err) {
+      console.error('Update method error:', err);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -130,6 +209,7 @@ export default function SettingsPage() {
     { id: 'password' as TabId, label: '密码策略', icon: Key },
     { id: 'general' as TabId, label: '基础配置', icon: Building2 },
     { id: 'collection' as TabId, label: '采集配置', icon: Download },
+    { id: 'interview_methods' as TabId, label: '面试方式', icon: Video },
   ];
 
   return (
@@ -460,6 +540,125 @@ export default function SettingsPage() {
                 </label>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Interview Methods Config */}
+      {activeTab === 'interview_methods' && (
+        <div className="bg-[#111827] border border-slate-800 rounded-xl p-6 space-y-5">
+          <div>
+            <h3 className="text-lg font-medium text-white">面试方式管理</h3>
+            <p className="text-sm text-slate-400 mt-1">配置系统支持的面试方式，新建面试时可选择</p>
+          </div>
+
+          {/* Add new method */}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newMethodName}
+              onChange={(e) => setNewMethodName(e.target.value)}
+              placeholder="输入新的面试方式名称"
+              className="flex-1 px-3 py-2 bg-[#0a0e1a] border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleAddMethod();
+                }
+              }}
+            />
+            <button
+              onClick={handleAddMethod}
+              disabled={!newMethodName.trim()}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-sky-500 hover:bg-sky-400 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+            >
+              <Plus className="w-4 h-4" />
+              添加
+            </button>
+          </div>
+
+          {/* Methods list */}
+          <div className="space-y-2">
+            {loadingMethods ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-5 h-5 animate-spin text-sky-400" />
+                <span className="ml-2 text-sm text-slate-400">加载中...</span>
+              </div>
+            ) : interviewMethods.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 text-sm">
+                暂无面试方式，请添加
+              </div>
+            ) : (
+              interviewMethods.map((method, index) => (
+                <div
+                  key={method.id}
+                  className="flex items-center gap-3 p-3 bg-[#0a0e1a] border border-slate-700 rounded-lg"
+                >
+                  <GripVertical className="w-4 h-4 text-slate-500 cursor-grab" />
+                  <span className="text-xs text-slate-500 w-6">{index + 1}.</span>
+                  {editingMethodId === method.id ? (
+                    <div className="flex-1 flex gap-2">
+                      <input
+                        type="text"
+                        value={editingMethodName}
+                        onChange={(e) => setEditingMethodName(e.target.value)}
+                        className="flex-1 px-2 py-1 bg-[#111827] border border-sky-500 rounded text-sm text-white focus:outline-none"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleUpdateMethod(method.id);
+                          } else if (e.key === 'Escape') {
+                            setEditingMethodId(null);
+                          }
+                        }}
+                      />
+                      <button
+                        onClick={() => handleUpdateMethod(method.id)}
+                        className="p-1 text-sky-400 hover:text-sky-300"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setEditingMethodId(null)}
+                        className="p-1 text-slate-400 hover:text-slate-300"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="flex-1 text-sm text-white">{method.name}</span>
+                      <button
+                        onClick={() => {
+                          setEditingMethodId(method.id);
+                          setEditingMethodName(method.name);
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-sky-400 transition-colors"
+                        title="编辑"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm(`确定要删除"${method.name}"吗？`)) {
+                            handleDeleteMethod(method.id);
+                          }
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-red-400 transition-colors"
+                        title="删除"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="p-3 bg-sky-500/5 border border-sky-500/20 rounded-lg">
+            <p className="text-xs text-sky-400">
+              提示：面试方式将显示在新建面试表单的下拉列表中，供面试官和HR选择。
+            </p>
           </div>
         </div>
       )}
