@@ -21,8 +21,9 @@ import {
   XCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { mockInterviews, mockInterviewers } from '@/lib/mock-data';
+import { mockInterviewers } from '@/lib/mock-data';
 import { Modal } from '@/components/ui/modal';
+import { InterviewCalendar, InterviewCalendarMobile } from '@/components/interview-calendar';
 
 type ViewMode = 'calendar' | 'list';
 
@@ -33,6 +34,7 @@ interface Interview {
   interviewerId: string;
   interviewerName: string;
   type: string;
+  method?: string;
   scheduledAt: string;
   duration: number;
   location: string;
@@ -94,17 +96,10 @@ const typeLabels = {
 const weekDays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const timeSlots = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
 
-const calendarInterviews: Record<string, Interview[]> = {
-  '0-1': [mockInterviews[0] as Interview],
-  '1-3': [mockInterviews[1] as Interview],
-  '2-2': [mockInterviews[2] as Interview],
-  '3-4': [mockInterviews[3] as Interview],
-  '4-1': mockInterviews[0] ? [mockInterviews[0] as Interview] : [], // 复用第一个面试数据
-};
-
 export default function InterviewsPage() {
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [interviews, setInterviews] = useState<Interview[]>(mockInterviews as Interview[]);
+  // Initialize viewMode from localStorage
+  const [viewMode, setViewModeState] = useState<ViewMode>('list');
+  const [interviews, setInterviews] = useState<Interview[]>([]);
   const [selectedInterview, setSelectedInterview] = useState<Interview | null>(null);
   const [showAIQuestions, setShowAIQuestions] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -119,6 +114,20 @@ export default function InterviewsPage() {
     method: '',
     notes: '',
   });
+
+  // View mode with localStorage persistence
+  const setViewMode = (mode: ViewMode) => {
+    setViewModeState(mode);
+    localStorage.setItem('interviews_view_mode', mode);
+  };
+
+  // Load view mode from localStorage on mount
+  useEffect(() => {
+    const savedMode = localStorage.getItem('interviews_view_mode') as ViewMode;
+    if (savedMode === 'calendar' || savedMode === 'list') {
+      setViewModeState(savedMode);
+    }
+  }, []);
 
   // Options for dropdowns
   const [candidates, setCandidates] = useState<CandidateOption[]>([]);
@@ -332,91 +341,75 @@ export default function InterviewsPage() {
         </div>
       </div>
 
-      {/* Calendar View - desktop only */}
+      {/* Calendar View - Month View */}
       {viewMode === 'calendar' && (
-        <div className="hidden sm:block rounded-xl border border-[#1e293b] bg-[#111827] overflow-hidden">
-          {/* Calendar Header */}
-          <div className="grid grid-cols-8 border-b border-[#1e293b]">
-            <div className="p-3 text-xs text-slate-600 border-r border-[#1e293b]">时间</div>
-            {weekDays.map((day, i) => (
-              <div
-                key={day}
-                className={cn(
-                  'p-3 text-center border-r border-[#1e293b] last:border-r-0',
-                  i === 0 ? 'bg-sky-500/5' : ''
-                )}
-              >
-                <p className="text-xs text-slate-500">{day}</p>
-                <p className={cn(
-                  'mt-1 text-lg font-semibold',
-                  i === 0 ? 'text-sky-400' : 'text-white'
-                )}>
-                  {22 + i}
-                </p>
-              </div>
-            ))}
+        <>
+          {/* Desktop Calendar */}
+          <div className="hidden md:block">
+            <InterviewCalendar
+              interviews={interviews.map(i => ({
+                id: i.id,
+                candidateId: i.candidateId,
+                interviewerId: i.interviewerId,
+                type: i.type,
+                method: i.method || 'offline',
+                startTime: i.scheduledAt,
+                endTime: new Date(new Date(i.scheduledAt).getTime() + (i.duration || 60) * 60000).toISOString(),
+                location: i.location || '',
+                status: i.status,
+                notes: '',
+                candidate: { name: i.candidateName, appliedPosition: i.position },
+                interviewer: { name: i.interviewerName },
+              }))}
+              onInterviewClick={(interview) => {
+                const pageInterview = interviews.find(i => i.id === interview.id);
+                if (pageInterview) setSelectedInterview(pageInterview);
+              }}
+              onDateClick={(date) => {
+                setFormData(prev => ({
+                  ...prev,
+                  scheduledAt: date.toISOString().slice(0, 16),
+                }));
+                setShowCreateModal(true);
+              }}
+            />
           </div>
-
-          {/* Calendar Body */}
-          <div className="grid grid-cols-8">
-            {/* Time column */}
-            <div className="border-r border-[#1e293b]">
-              {timeSlots.map((time) => (
-                <div key={time} className="h-20 border-b border-[#1e293b] p-2">
-                  <span className="text-xs text-slate-600 font-mono">{time}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Day columns */}
-            {weekDays.map((_, dayIndex) => (
-              <div key={dayIndex} className="border-r border-[#1e293b] last:border-r-0">
-                {timeSlots.map((time, timeIndex) => {
-                  const key = `${dayIndex}-${timeIndex}`;
-                  const interviews = calendarInterviews[key];
-                  return (
-                    <div
-                      key={key}
-                      className={cn(
-                        'h-20 border-b border-[#1e293b] p-1 transition-colors hover:bg-[#1a2236]/50',
-                        dayIndex === 0 ? 'bg-sky-500/[0.02]' : ''
-                      )}
-                    >
-                      {interviews?.map((interview) => {
-                        const colors = typeColors[interview.type as keyof typeof typeColors];
-                        return (
-                          <div
-                            key={interview.id}
-                            onClick={() => setSelectedInterview(interview)}
-                            className={cn(
-                              'h-full rounded-lg border p-2 cursor-pointer transition-all hover:scale-[1.02]',
-                              colors.bg, colors.border
-                            )}
-                          >
-                            <p className={cn('text-xs font-medium truncate', colors.text)}>
-                              {interview.candidateName}
-                            </p>
-                            <p className="text-[10px] text-slate-500 truncate">
-                              {typeLabels[interview.type as keyof typeof typeLabels]} · {interview.interviewerName}
-                            </p>
-                            <p className="text-[10px] text-slate-600 truncate mt-0.5">
-                              {interview.room}
-                            </p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
+          {/* Mobile Calendar */}
+          <div className="md:hidden">
+            <InterviewCalendarMobile
+              interviews={interviews.map(i => ({
+                id: i.id,
+                candidateId: i.candidateId,
+                interviewerId: i.interviewerId,
+                type: i.type,
+                method: i.method || 'offline',
+                startTime: i.scheduledAt,
+                endTime: new Date(new Date(i.scheduledAt).getTime() + (i.duration || 60) * 60000).toISOString(),
+                location: i.location || '',
+                status: i.status,
+                notes: '',
+                candidate: { name: i.candidateName, appliedPosition: i.position },
+                interviewer: { name: i.interviewerName },
+              }))}
+              onInterviewClick={(interview) => {
+                const pageInterview = interviews.find(i => i.id === interview.id);
+                if (pageInterview) setSelectedInterview(pageInterview);
+              }}
+              onDateClick={(date) => {
+                setFormData(prev => ({
+                  ...prev,
+                  scheduledAt: date.toISOString().slice(0, 16),
+                }));
+                setShowCreateModal(true);
+              }}
+            />
           </div>
-        </div>
+        </>
       )}
 
       {/* List View */}
-      {(viewMode === 'list' || typeof window !== 'undefined') && (
-        <div className={cn('space-y-2.5 md:space-y-3', viewMode === 'calendar' && 'hidden sm:hidden')}>
+      {viewMode === 'list' && (
+        <div className="space-y-2.5 md:space-y-3">
           {interviews.length === 0 ? (
             <div className="text-center py-12 text-slate-500">
               <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
