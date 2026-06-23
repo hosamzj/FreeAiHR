@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   Search,
   Filter,
@@ -44,6 +44,9 @@ export default function ResumesPage() {
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showAiScreenModal, setShowAiScreenModal] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [selectedCandidate, setSelectedCandidate] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -55,8 +58,80 @@ export default function ResumesPage() {
     }, 2500);
   }, []);
 
+  const handleFileSelect = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setIsParsing(true);
+      setTimeout(() => {
+        setIsParsing(false);
+        setParsedResult(mockParsedResume);
+      }, 2500);
+    }
+  }, []);
+
+  const handlePassScreen = useCallback(async (candidateId: string, candidateName: string) => {
+    try {
+      const res = await fetch(`/api/candidates/${candidateId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'screening' }),
+      });
+      if (res.ok) {
+        alert(`已通过 ${candidateName} 的筛选`);
+      }
+    } catch (error) {
+      alert('操作失败，请重试');
+    }
+  }, []);
+
+  const handleScheduleInterview = useCallback((candidateId: string, candidateName: string) => {
+    setSelectedCandidate(candidateId);
+    setShowScheduleModal(true);
+  }, []);
+
+  const handleReject = useCallback(async (candidateId: string, candidateName: string) => {
+    if (!confirm(`确定要淘汰 ${candidateName} 吗？`)) return;
+    try {
+      const res = await fetch(`/api/candidates/${candidateId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'rejected' }),
+      });
+      if (res.ok) {
+        alert(`已淘汰 ${candidateName}`);
+      }
+    } catch (error) {
+      alert('操作失败，请重试');
+    }
+  }, []);
+
+  // Filter candidates based on active tab
+  const filteredCandidates = mockCandidates.filter(candidate => {
+    if (activeTab === 'all') return true;
+    return candidate.status === activeTab;
+  });
+
   return (
     <div className="space-y-4 md:space-y-5">
+      {/* Page Title */}
+      <div>
+        <h1 className="text-lg md:text-xl font-bold text-white">简历管理</h1>
+        <p className="mt-0.5 text-xs text-slate-500">AI 智能解析简历，自动评估候选人匹配度</p>
+      </div>
+
+      {/* Hidden file input for upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
       {/* Top Actions */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
@@ -96,8 +171,9 @@ export default function ResumesPage() {
         onDragOver={(e) => { e.preventDefault(); setIsUploading(true); }}
         onDragLeave={() => setIsUploading(false)}
         onDrop={handleDrop}
+        onClick={handleFileSelect}
         className={cn(
-          'relative rounded-xl border-2 border-dashed transition-all duration-300',
+          'relative rounded-xl border-2 border-dashed transition-all duration-300 cursor-pointer',
           isUploading
             ? 'border-sky-500/50 bg-sky-500/5'
             : isParsing
@@ -261,7 +337,13 @@ export default function ResumesPage() {
 
       {/* Candidates Grid */}
       <div className="grid gap-2.5 md:gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {mockCandidates.map((candidate) => (
+        {filteredCandidates.length === 0 ? (
+          <div className="col-span-full flex flex-col items-center py-12 text-slate-500">
+            <FileText className="h-10 w-10 mb-3 text-slate-700" />
+            <p className="text-sm">暂无该状态的候选人</p>
+          </div>
+        ) : (
+        filteredCandidates.map((candidate) => (
           <div
             key={candidate.id}
             className="card-hover rounded-xl border border-[#1e293b] bg-[#111827] overflow-hidden"
@@ -352,19 +434,19 @@ export default function ResumesPage() {
                 </div>
                 <div className="flex flex-wrap gap-2 pt-1">
                   <button
-                    onClick={() => alert(`已通过 ${candidate.name} 的筛选`)}
+                    onClick={() => handlePassScreen(candidate.id, candidate.name)}
                     className="flex h-7 md:h-8 items-center gap-1 rounded-lg bg-sky-500 px-2.5 md:px-3 text-[11px] md:text-xs font-medium text-white hover:bg-sky-600 transition-colors"
                   >
                     <Check className="h-3 w-3" /> 通过筛选
                   </button>
                   <button
-                    onClick={() => alert(`为 ${candidate.name} 安排面试`)}
+                    onClick={() => handleScheduleInterview(candidate.id, candidate.name)}
                     className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-[#1e293b] px-2.5 md:px-3 text-[11px] md:text-xs text-slate-400 hover:text-white transition-colors"
                   >
                     <Calendar className="h-3 w-3" /> 安排面试
                   </button>
                   <button
-                    onClick={() => alert(`已淘汰 ${candidate.name}`)}
+                    onClick={() => handleReject(candidate.id, candidate.name)}
                     className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-red-500/20 px-2.5 md:px-3 text-[11px] md:text-xs text-red-400 hover:bg-red-500/10 transition-colors"
                   >
                     <X className="h-3 w-3" /> 淘汰
@@ -396,8 +478,151 @@ export default function ResumesPage() {
               </div>
             </div>
           </div>
-        ))}
+        )))
+        }
       </div>
+
+      {/* Filter Modal */}
+      <Modal isOpen={showFilterModal} onClose={() => setShowFilterModal(false)} title="筛选条件">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">目标岗位</label>
+            <select className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none">
+              <option value="">全部岗位</option>
+              <option value="frontend">前端开发工程师</option>
+              <option value="backend">后端开发工程师</option>
+              <option value="fullstack">全栈开发工程师</option>
+              <option value="product">产品经理</option>
+              <option value="designer">UI/UX 设计师</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">候选人状态</label>
+            <select className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none">
+              <option value="">全部状态</option>
+              <option value="new">新简历</option>
+              <option value="screening">筛选中</option>
+              <option value="interview">面试中</option>
+              <option value="offer">待Offer</option>
+              <option value="hired">已入职</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">最低匹配度</label>
+            <div className="flex items-center gap-3">
+              <input type="range" min="0" max="100" defaultValue="0" className="flex-1 accent-sky-500" />
+              <span className="text-xs text-slate-400 font-mono w-8">0%</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">关键技能</label>
+            <input type="text" placeholder="输入技能关键词，如 React、Node.js" className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 placeholder:text-slate-600 focus:border-sky-500/50 focus:outline-none" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">投递时间</label>
+            <div className="grid grid-cols-2 gap-2">
+              <input type="date" className="h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none" />
+              <input type="date" className="h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none" />
+            </div>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setShowFilterModal(false)} className="flex-1 h-9 rounded-lg bg-sky-500 text-sm font-medium text-white hover:bg-sky-600 transition-colors">
+              应用筛选
+            </button>
+            <button onClick={() => setShowFilterModal(false)} className="flex-1 h-9 rounded-lg border border-[#1e293b] text-sm text-slate-400 hover:text-white transition-colors">
+              重置
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Batch Import Modal */}
+      <Modal isOpen={showImportModal} onClose={() => setShowImportModal(false)} title="批量导入简历">
+        <div className="space-y-4">
+          <div
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => e.preventDefault()}
+            className="rounded-xl border-2 border-dashed border-[#1e293b] bg-[#0a0e1a]/50 p-6 text-center hover:border-slate-600 transition-colors cursor-pointer"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload className="h-8 w-8 mx-auto mb-3 text-slate-600" />
+            <p className="text-sm text-slate-400">拖拽文件到此处，或 <span className="text-sky-400">点击选择文件</span></p>
+            <p className="mt-1 text-xs text-slate-600">支持 PDF、Word 格式，单次最多 20 个文件</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">导入到岗位</label>
+            <select className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none">
+              <option value="">选择目标岗位</option>
+              <option value="frontend">前端开发工程师</option>
+              <option value="backend">后端开发工程师</option>
+              <option value="fullstack">全栈开发工程师</option>
+              <option value="product">产品经理</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2 rounded-lg bg-sky-500/5 border border-sky-500/20 p-3">
+            <Sparkles className="h-4 w-4 text-sky-400 shrink-0" />
+            <p className="text-xs text-sky-400">导入后将自动进行 AI 解析和匹配度评估</p>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setShowImportModal(false)} className="flex-1 h-9 rounded-lg bg-sky-500 text-sm font-medium text-white hover:bg-sky-600 transition-colors">
+              开始导入
+            </button>
+            <button onClick={() => setShowImportModal(false)} className="flex-1 h-9 rounded-lg border border-[#1e293b] text-sm text-slate-400 hover:text-white transition-colors">
+              取消
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Schedule Interview Modal */}
+      <Modal isOpen={showScheduleModal} onClose={() => setShowScheduleModal(false)} title="安排面试">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">面试轮次</label>
+            <select className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none">
+              <option value="first">初面</option>
+              <option value="second">复面</option>
+              <option value="final">终面</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">面试官</label>
+            <select className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none">
+              <option value="1">张经理 - 技术总监</option>
+              <option value="2">李主管 - 前端负责人</option>
+              <option value="3">王总监 - CTO</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">面试日期</label>
+            <input type="date" className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">面试时间</label>
+            <input type="time" className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">面试方式</label>
+            <div className="flex gap-2">
+              <button className="flex-1 h-9 rounded-lg bg-sky-500/10 border border-sky-500/30 text-xs text-sky-400">视频面试</button>
+              <button className="flex-1 h-9 rounded-lg border border-[#1e293b] text-xs text-slate-400 hover:text-white transition-colors">现场面试</button>
+              <button className="flex-1 h-9 rounded-lg border border-[#1e293b] text-xs text-slate-400 hover:text-white transition-colors">电话面试</button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">备注</label>
+            <textarea rows={3} placeholder="面试注意事项或特殊要求..." className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-slate-300 placeholder:text-slate-600 focus:border-sky-500/50 focus:outline-none resize-none" />
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => { setShowScheduleModal(false); alert('面试已安排，通知已发送给候选人'); }} className="flex-1 h-9 rounded-lg bg-sky-500 text-sm font-medium text-white hover:bg-sky-600 transition-colors">
+              确认安排
+            </button>
+            <button onClick={() => setShowScheduleModal(false)} className="flex-1 h-9 rounded-lg border border-[#1e293b] text-sm text-slate-400 hover:text-white transition-colors">
+              取消
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
