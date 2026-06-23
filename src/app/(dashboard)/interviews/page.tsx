@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Calendar,
   Clock,
@@ -15,11 +15,44 @@ import {
   LayoutGrid,
   Plus,
   User,
+  X,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { mockInterviews, mockInterviewers } from '@/lib/mock-data';
+import { Modal } from '@/components/ui/modal';
 
 type ViewMode = 'calendar' | 'list';
+
+interface Interview {
+  id: string;
+  candidateId: string;
+  candidateName: string;
+  interviewerId: string;
+  interviewerName: string;
+  type: string;
+  scheduledAt: string;
+  duration: number;
+  location: string;
+  room: string;
+  position: string;
+  status: string;
+  aiQuestions?: string[];
+  rating?: {
+    score: number;
+    comment: string;
+    aiComment: string;
+  };
+}
+
+interface CreateInterviewForm {
+  candidateId: string;
+  interviewerId: string;
+  type: string;
+  scheduledAt: string;
+  duration: number;
+  location: string;
+}
 
 const typeColors = {
   first: { bg: 'bg-sky-500/10', text: 'text-sky-400', border: 'border-sky-500/20' },
@@ -40,21 +73,122 @@ const typeLabels = {
 const weekDays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const timeSlots = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
 
-const calendarInterviews: Record<string, typeof mockInterviews> = {
-  '0-1': [mockInterviews[0]],
-  '1-3': [mockInterviews[1]],
-  '2-2': [mockInterviews[2]],
-  '3-4': [mockInterviews[3]],
-  '4-1': mockInterviews[0] ? [mockInterviews[0]] : [], // 复用第一个面试数据
+const calendarInterviews: Record<string, Interview[]> = {
+  '0-1': [mockInterviews[0] as Interview],
+  '1-3': [mockInterviews[1] as Interview],
+  '2-2': [mockInterviews[2] as Interview],
+  '3-4': [mockInterviews[3] as Interview],
+  '4-1': mockInterviews[0] ? [mockInterviews[0] as Interview] : [], // 复用第一个面试数据
 };
 
 export default function InterviewsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [selectedInterview, setSelectedInterview] = useState<typeof mockInterviews[0] | null>(null);
+  const [interviews, setInterviews] = useState<Interview[]>(mockInterviews as Interview[]);
+  const [selectedInterview, setSelectedInterview] = useState<Interview | null>(null);
   const [showAIQuestions, setShowAIQuestions] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState<CreateInterviewForm>({
+    candidateId: '',
+    interviewerId: '',
+    type: 'first',
+    scheduledAt: '',
+    duration: 60,
+    location: '',
+  });
+
+  // Fetch interviews from API
+  const fetchInterviews = useCallback(async () => {
+    try {
+      const res = await fetch('/api/interviews');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.code === 0 && data.data && data.data.length > 0) {
+          // Transform API data to match UI format
+          const transformed = data.data.map((item: any) => ({
+            id: item.id,
+            candidateId: item.candidateId,
+            candidateName: item.candidate?.name || '未知候选人',
+            interviewerId: item.interviewerId,
+            interviewerName: item.interviewer?.name || '未分配',
+            type: item.type || 'first',
+            scheduledAt: new Date(item.scheduledAt).toLocaleString('zh-CN', {
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+            duration: item.duration || 60,
+            location: item.location || '线上',
+            room: item.location || '线上面试',
+            position: item.candidate?.appliedPosition || '未知岗位',
+            status: item.status || 'scheduled',
+            aiQuestions: ['请介绍一下你的项目经验', '你遇到过最大的技术挑战是什么？', '你对这个岗位有什么期望？'],
+          }));
+          setInterviews(transformed);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch interviews:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchInterviews();
+  }, [fetchInterviews]);
+
+  // Handle create interview
+  const handleCreateInterview = async () => {
+    if (!formData.candidateId || !formData.interviewerId || !formData.scheduledAt) {
+      alert('请填写必要信息');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/interviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await res.json();
+      if (data.code === 0) {
+        alert('面试安排创建成功！');
+        setShowCreateModal(false);
+        setFormData({
+          candidateId: '',
+          interviewerId: '',
+          type: 'first',
+          scheduledAt: '',
+          duration: 60,
+          location: '',
+        });
+        fetchInterviews();
+      } else {
+        alert(data.message || '创建失败');
+      }
+    } catch (error) {
+      console.error('Failed to create interview:', error);
+      alert('创建失败，请重试');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="space-y-4 md:space-y-5">
+      {/* Page Title */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl md:text-2xl font-bold text-white flex items-center gap-2">
+            <Calendar className="h-6 w-6 md:h-7 md:w-7 text-sky-400" />
+            面试管理
+          </h1>
+          <p className="mt-1 text-xs md:text-sm text-slate-500">智能排期、面试官匹配、冲突检测</p>
+        </div>
+      </div>
+
       {/* Top Actions */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
@@ -86,7 +220,7 @@ export default function InterviewsPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => alert('新建面试安排功能开发中...')}
+            onClick={() => setShowCreateModal(true)}
             className="flex h-9 items-center gap-1.5 rounded-lg bg-sky-500 px-3 text-xs md:text-sm font-medium text-white hover:bg-sky-600 transition-colors"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -181,7 +315,14 @@ export default function InterviewsPage() {
       {/* List View */}
       {(viewMode === 'list' || typeof window !== 'undefined') && (
         <div className={cn('space-y-2.5 md:space-y-3', viewMode === 'calendar' && 'hidden sm:hidden')}>
-          {mockInterviews.map((interview) => {
+          {interviews.length === 0 ? (
+            <div className="text-center py-12 text-slate-500">
+              <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
+              <p className="text-sm">暂无面试安排</p>
+              <p className="text-xs mt-1">点击"新建面试安排"创建第一个面试</p>
+            </div>
+          ) : (
+          interviews.map((interview) => {
             const colors = typeColors[interview.type as keyof typeof typeColors];
             return (
               <div
@@ -276,7 +417,7 @@ export default function InterviewsPage() {
                 )}
               </div>
             );
-          })}
+          }))}
         </div>
       )}
 
@@ -336,6 +477,104 @@ export default function InterviewsPage() {
           </div>
         </div>
       </div>
+
+      {/* Create Interview Modal */}
+      <Modal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="新建面试安排"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">候选人 *</label>
+            <input
+              type="text"
+              value={formData.candidateId}
+              onChange={(e) => setFormData({ ...formData, candidateId: e.target.value })}
+              placeholder="输入候选人ID或姓名"
+              className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white placeholder-slate-600 focus:border-sky-500 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">面试官 *</label>
+            <select
+              value={formData.interviewerId}
+              onChange={(e) => setFormData({ ...formData, interviewerId: e.target.value })}
+              className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
+            >
+              <option value="">选择面试官</option>
+              {mockInterviewers.map((i) => (
+                <option key={i.id} value={i.id}>{i.name} - {i.department}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1.5">面试类型</label>
+              <select
+                value={formData.type}
+                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
+              >
+                <option value="first">初面</option>
+                <option value="technical">技术面</option>
+                <option value="hr">HR面</option>
+                <option value="final">终面</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1.5">时长（分钟）</label>
+              <input
+                type="number"
+                value={formData.duration}
+                onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) || 60 })}
+                className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">面试时间 *</label>
+            <input
+              type="datetime-local"
+              value={formData.scheduledAt}
+              onChange={(e) => setFormData({ ...formData, scheduledAt: e.target.value })}
+              className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">面试地点/链接</label>
+            <input
+              type="text"
+              value={formData.location}
+              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+              placeholder="如：3楼会议室A / 腾讯会议链接"
+              className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white placeholder-slate-600 focus:border-sky-500 focus:outline-none"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-[#1e293b]">
+            <button
+              onClick={() => setShowCreateModal(false)}
+              className="rounded-lg border border-[#1e293b] px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleCreateInterview}
+              disabled={isSubmitting}
+              className="flex items-center gap-2 rounded-lg bg-sky-500 px-4 py-2 text-sm font-medium text-white hover:bg-sky-600 disabled:opacity-50 transition-colors"
+            >
+              {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isSubmitting ? '创建中...' : '确认创建'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
