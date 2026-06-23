@@ -18,21 +18,17 @@ import {
   Star,
   MapPin,
   Calendar,
+  RotateCcw,
+  DollarSign,
+  UserCheck,
+  UserX,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { mockCandidates, mockParsedResume } from '@/lib/mock-data';
 import { Modal } from '@/components/ui/modal';
 
-type TabType = 'all' | 'new' | 'screening' | 'interview' | 'offer' | 'hired';
-
-const tabs: { id: TabType; label: string; count: number }[] = [
-  { id: 'all', label: '全部', count: 48 },
-  { id: 'new', label: '新简历', count: 12 },
-  { id: 'screening', label: '筛选中', count: 18 },
-  { id: 'interview', label: '面试中', count: 10 },
-  { id: 'offer', label: '待Offer', count: 5 },
-  { id: 'hired', label: '已入职', count: 3 },
-];
+type CandidateStatus = 'new' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected';
+type TabType = 'all' | CandidateStatus;
 
 export default function ResumesPage() {
   const [activeTab, setActiveTab] = useState<TabType>('all');
@@ -43,12 +39,33 @@ export default function ResumesPage() {
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [showAiScreenModal, setShowAiScreenModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showOfferModal, setShowOfferModal] = useState(false);
+  const [showRejectOfferModal, setShowRejectOfferModal] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<string | null>(null);
   const [candidates, setCandidates] = useState(mockCandidates);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Compute dynamic tab counts from candidates state
+  const tabCounts = {
+    all: candidates.length,
+    new: candidates.filter(c => c.status === 'new').length,
+    screening: candidates.filter(c => c.status === 'screening').length,
+    interview: candidates.filter(c => c.status === 'interview').length,
+    offer: candidates.filter(c => c.status === 'offer').length,
+    hired: candidates.filter(c => c.status === 'hired').length,
+    rejected: candidates.filter(c => c.status === 'rejected').length,
+  };
+
+  const tabs: { id: TabType; label: string; count: number }[] = [
+    { id: 'all', label: '全部', count: tabCounts.all },
+    { id: 'new', label: '新简历', count: tabCounts.new },
+    { id: 'screening', label: '筛选中', count: tabCounts.screening },
+    { id: 'interview', label: '面试中', count: tabCounts.interview },
+    { id: 'offer', label: '待Offer', count: tabCounts.offer },
+    { id: 'hired', label: '已入职', count: tabCounts.hired },
+  ];
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -101,13 +118,95 @@ export default function ResumesPage() {
     if (!confirm(`确定要淘汰 ${candidateName} 吗？`)) return;
     setActionLoading(candidateId);
     try {
-      // Update local state for immediate feedback
       setCandidates(prev => prev.map(c => 
         c.id === candidateId ? { ...c, status: 'rejected' as const } : c
       ));
-      // Simulate API call delay
       await new Promise(resolve => setTimeout(resolve, 500));
       alert(`已淘汰 ${candidateName}`);
+    } catch (error) {
+      alert('操作失败，请重试');
+    } finally {
+      setActionLoading(null);
+    }
+  }, []);
+
+  // 通过面试 → 发Offer（打开Offer模态框）
+  const handlePassInterview = useCallback((candidateId: string) => {
+    setSelectedCandidate(candidateId);
+    setShowOfferModal(true);
+  }, []);
+
+  // 确认发Offer → 状态变为"待Offer"
+  const handleConfirmOffer = useCallback(async () => {
+    if (!selectedCandidate) return;
+    setActionLoading(selectedCandidate);
+    try {
+      setCandidates(prev => prev.map(c =>
+        c.id === selectedCandidate ? { ...c, status: 'offer' as const } : c
+      ));
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const candidate = candidates.find(c => c.id === selectedCandidate);
+      alert(`已向 ${candidate?.name || '候选人'} 发送Offer`);
+      setShowOfferModal(false);
+    } catch (error) {
+      alert('操作失败，请重试');
+    } finally {
+      setActionLoading(null);
+    }
+  }, [selectedCandidate, candidates]);
+
+  // 接受Offer → 状态变为"已入职"
+  const handleAcceptOffer = useCallback(async (candidateId: string, candidateName: string) => {
+    if (!confirm(`确认 ${candidateName} 已接受Offer并办理入职？`)) return;
+    setActionLoading(candidateId);
+    try {
+      setCandidates(prev => prev.map(c =>
+        c.id === candidateId ? { ...c, status: 'hired' as const } : c
+      ));
+      await new Promise(resolve => setTimeout(resolve, 500));
+      alert(`${candidateName} 已入职！`);
+    } catch (error) {
+      alert('操作失败，请重试');
+    } finally {
+      setActionLoading(null);
+    }
+  }, []);
+
+  // 拒绝Offer → 打开拒绝原因模态框
+  const handleRejectOffer = useCallback((candidateId: string) => {
+    setSelectedCandidate(candidateId);
+    setShowRejectOfferModal(true);
+  }, []);
+
+  // 确认拒绝Offer → 状态变为"已淘汰"
+  const handleConfirmRejectOffer = useCallback(async (reason: string) => {
+    if (!selectedCandidate) return;
+    setActionLoading(selectedCandidate);
+    try {
+      setCandidates(prev => prev.map(c =>
+        c.id === selectedCandidate ? { ...c, status: 'rejected' as const } : c
+      ));
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const candidate = candidates.find(c => c.id === selectedCandidate);
+      alert(`${candidate?.name || '候选人'} 已拒绝Offer`);
+      setShowRejectOfferModal(false);
+    } catch (error) {
+      alert('操作失败，请重试');
+    } finally {
+      setActionLoading(null);
+    }
+  }, [selectedCandidate, candidates]);
+
+  // 重新激活 → 状态回到"筛选中"
+  const handleReactivate = useCallback(async (candidateId: string, candidateName: string) => {
+    if (!confirm(`确定要重新激活 ${candidateName} 的招聘流程吗？`)) return;
+    setActionLoading(candidateId);
+    try {
+      setCandidates(prev => prev.map(c =>
+        c.id === candidateId ? { ...c, status: 'screening' as const } : c
+      ));
+      await new Promise(resolve => setTimeout(resolve, 500));
+      alert(`${candidateName} 已重新激活`);
     } catch (error) {
       alert('操作失败，请重试');
     } finally {
@@ -379,10 +478,12 @@ export default function ResumesPage() {
                       candidate.status === 'screening' ? 'bg-amber-500/10 text-amber-400' :
                       candidate.status === 'interview' ? 'bg-violet-500/10 text-violet-400' :
                       candidate.status === 'offer' ? 'bg-emerald-500/10 text-emerald-400' :
-                      'bg-slate-500/10 text-slate-400'
+                      candidate.status === 'hired' ? 'bg-green-500/10 text-green-400' :
+                      'bg-red-500/10 text-red-400'
                     )}>
                       {candidate.status === 'new' ? '新投递' : candidate.status === 'screening' ? '筛选中' :
-                       candidate.status === 'interview' ? '面试中' : candidate.status === 'offer' ? '待Offer' : '已入职'}
+                       candidate.status === 'interview' ? '面试中' : candidate.status === 'offer' ? '待Offer' :
+                       candidate.status === 'hired' ? '已入职' : '已淘汰'}
                     </span>
                     <span className="flex items-center gap-0.5 text-[10px] md:text-[11px] text-slate-500">
                       <Clock className="h-2.5 w-2.5" /> {candidate.appliedAt}
@@ -439,30 +540,124 @@ export default function ResumesPage() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2 pt-1">
-                  <button
-                    onClick={() => handlePassScreen(candidate.id, candidate.name)}
-                    disabled={actionLoading === candidate.id}
-                    className="flex h-7 md:h-8 items-center gap-1 rounded-lg bg-sky-500 px-2.5 md:px-3 text-[11px] md:text-xs font-medium text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
-                  >
-                    {actionLoading === candidate.id ? (
-                      <><div className="h-3 w-3 rounded-full border-2 border-white/30 border-t-white animate-spin" /> 处理中...</>
-                    ) : (
-                      <><Check className="h-3 w-3" /> 通过筛选</>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => handleScheduleInterview(candidate.id, candidate.name)}
-                    className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-[#1e293b] px-2.5 md:px-3 text-[11px] md:text-xs text-slate-400 hover:text-white cursor-pointer transition-colors"
-                  >
-                    <Calendar className="h-3 w-3" /> 安排面试
-                  </button>
-                  <button
-                    onClick={() => handleReject(candidate.id, candidate.name)}
-                    disabled={actionLoading === candidate.id}
-                    className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-red-500/20 px-2.5 md:px-3 text-[11px] md:text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
-                  >
-                    <X className="h-3 w-3" /> 淘汰
-                  </button>
+                  {/* 新简历 → 通过筛选、淘汰 */}
+                  {candidate.status === 'new' && (
+                    <>
+                      <button
+                        onClick={() => handlePassScreen(candidate.id, candidate.name)}
+                        disabled={actionLoading === candidate.id}
+                        className="flex h-7 md:h-8 items-center gap-1 rounded-lg bg-sky-500 px-2.5 md:px-3 text-[11px] md:text-xs font-medium text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                      >
+                        {actionLoading === candidate.id ? (
+                          <><div className="h-3 w-3 rounded-full border-2 border-white/30 border-t-white animate-spin" /> 处理中...</>
+                        ) : (
+                          <><Check className="h-3 w-3" /> 通过筛选</>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleReject(candidate.id, candidate.name)}
+                        disabled={actionLoading === candidate.id}
+                        className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-red-500/20 px-2.5 md:px-3 text-[11px] md:text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                      >
+                        <X className="h-3 w-3" /> 淘汰
+                      </button>
+                    </>
+                  )}
+
+                  {/* 筛选中 → 安排面试、淘汰 */}
+                  {candidate.status === 'screening' && (
+                    <>
+                      <button
+                        onClick={() => handleScheduleInterview(candidate.id, candidate.name)}
+                        disabled={actionLoading === candidate.id}
+                        className="flex h-7 md:h-8 items-center gap-1 rounded-lg bg-violet-500 px-2.5 md:px-3 text-[11px] md:text-xs font-medium text-white hover:bg-violet-600 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                      >
+                        {actionLoading === candidate.id ? (
+                          <><div className="h-3 w-3 rounded-full border-2 border-white/30 border-t-white animate-spin" /> 处理中...</>
+                        ) : (
+                          <><Calendar className="h-3 w-3" /> 安排面试</>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleReject(candidate.id, candidate.name)}
+                        disabled={actionLoading === candidate.id}
+                        className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-red-500/20 px-2.5 md:px-3 text-[11px] md:text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                      >
+                        <X className="h-3 w-3" /> 淘汰
+                      </button>
+                    </>
+                  )}
+
+                  {/* 面试中 → 通过面试（发Offer）、淘汰 */}
+                  {candidate.status === 'interview' && (
+                    <>
+                      <button
+                        onClick={() => handlePassInterview(candidate.id)}
+                        disabled={actionLoading === candidate.id}
+                        className="flex h-7 md:h-8 items-center gap-1 rounded-lg bg-emerald-500 px-2.5 md:px-3 text-[11px] md:text-xs font-medium text-white hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                      >
+                        {actionLoading === candidate.id ? (
+                          <><div className="h-3 w-3 rounded-full border-2 border-white/30 border-t-white animate-spin" /> 处理中...</>
+                        ) : (
+                          <><DollarSign className="h-3 w-3" /> 通过面试（发Offer）</>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleReject(candidate.id, candidate.name)}
+                        disabled={actionLoading === candidate.id}
+                        className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-red-500/20 px-2.5 md:px-3 text-[11px] md:text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                      >
+                        <X className="h-3 w-3" /> 淘汰
+                      </button>
+                    </>
+                  )}
+
+                  {/* 待Offer → 接受Offer入职、拒绝Offer */}
+                  {candidate.status === 'offer' && (
+                    <>
+                      <button
+                        onClick={() => handleAcceptOffer(candidate.id, candidate.name)}
+                        disabled={actionLoading === candidate.id}
+                        className="flex h-7 md:h-8 items-center gap-1 rounded-lg bg-emerald-500 px-2.5 md:px-3 text-[11px] md:text-xs font-medium text-white hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                      >
+                        {actionLoading === candidate.id ? (
+                          <><div className="h-3 w-3 rounded-full border-2 border-white/30 border-t-white animate-spin" /> 处理中...</>
+                        ) : (
+                          <><UserCheck className="h-3 w-3" /> 接受Offer（入职）</>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleRejectOffer(candidate.id)}
+                        disabled={actionLoading === candidate.id}
+                        className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-red-500/20 px-2.5 md:px-3 text-[11px] md:text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                      >
+                        <UserX className="h-3 w-3" /> 拒绝Offer
+                      </button>
+                    </>
+                  )}
+
+                  {/* 已入职 → 查看详情（无操作按钮） */}
+                  {candidate.status === 'hired' && (
+                    <div className="flex items-center gap-1.5 text-[11px] md:text-xs text-emerald-400">
+                      <Check className="h-3.5 w-3.5" />
+                      <span>已入职，流程完成</span>
+                    </div>
+                  )}
+
+                  {/* 已淘汰 → 重新激活 */}
+                  {candidate.status === 'rejected' && (
+                    <button
+                      onClick={() => handleReactivate(candidate.id, candidate.name)}
+                      disabled={actionLoading === candidate.id}
+                      className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-sky-500/20 px-2.5 md:px-3 text-[11px] md:text-xs text-sky-400 hover:bg-sky-500/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                    >
+                      {actionLoading === candidate.id ? (
+                        <><div className="h-3 w-3 rounded-full border-2 border-sky-400/30 border-t-sky-400 animate-spin" /> 处理中...</>
+                      ) : (
+                        <><RotateCcw className="h-3 w-3" /> 重新激活</>
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -626,10 +821,126 @@ export default function ResumesPage() {
             <textarea rows={3} placeholder="面试注意事项或特殊要求..." className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-slate-300 placeholder:text-slate-600 focus:border-sky-500/50 focus:outline-none resize-none" />
           </div>
           <div className="flex gap-2 pt-2">
-            <button onClick={() => { setShowScheduleModal(false); alert('面试已安排，通知已发送给候选人'); }} className="flex-1 h-9 rounded-lg bg-sky-500 text-sm font-medium text-white hover:bg-sky-600 transition-colors">
+            <button onClick={() => {
+              if (selectedCandidate) {
+                const candidate = candidates.find(c => c.id === selectedCandidate);
+                setCandidates(prev => prev.map(c =>
+                  c.id === selectedCandidate ? { ...c, status: 'interview' as const } : c
+                ));
+                setShowScheduleModal(false);
+                alert(`已为 ${candidate?.name || '候选人'} 安排面试`);
+              }
+            }} className="flex-1 h-9 rounded-lg bg-sky-500 text-sm font-medium text-white hover:bg-sky-600 transition-colors">
               确认安排
             </button>
             <button onClick={() => setShowScheduleModal(false)} className="flex-1 h-9 rounded-lg border border-[#1e293b] text-sm text-slate-400 hover:text-white transition-colors">
+              取消
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Offer Modal - 发Offer */}
+      <Modal isOpen={showOfferModal} onClose={() => setShowOfferModal(false)} title="发放Offer">
+        <div className="space-y-4">
+          {(() => {
+            const candidate = candidates.find(c => c.id === selectedCandidate);
+            return candidate ? (
+              <div className="flex items-center gap-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20 p-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500/20 to-green-600/20 text-xs font-bold text-emerald-400">
+                  {candidate.avatar}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-white">{candidate.name}</p>
+                  <p className="text-xs text-slate-500">{candidate.position}</p>
+                </div>
+              </div>
+            ) : null;
+          })()}
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">录用岗位</label>
+            <input type="text" defaultValue={candidates.find(c => c.id === selectedCandidate)?.position || ''} className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1.5">基本月薪 (元)</label>
+              <input type="number" placeholder="如 25000" className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 placeholder:text-slate-600 focus:border-sky-500/50 focus:outline-none" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1.5">年终奖 (月数)</label>
+              <input type="number" placeholder="如 3" className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 placeholder:text-slate-600 focus:border-sky-500/50 focus:outline-none" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1.5">预计入职日期</label>
+              <input type="date" className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1.5">Offer有效期至</label>
+              <input type="date" className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">试用期 (月)</label>
+            <select className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none">
+              <option value="3">3个月</option>
+              <option value="6">6个月</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">备注</label>
+            <textarea rows={2} placeholder="Offer附加说明..." className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-slate-300 placeholder:text-slate-600 focus:border-sky-500/50 focus:outline-none resize-none" />
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={handleConfirmOffer}
+              disabled={actionLoading === selectedCandidate}
+              className="flex-1 h-9 rounded-lg bg-emerald-500 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+            >
+              {actionLoading === selectedCandidate ? '发送中...' : '确认发送Offer'}
+            </button>
+            <button onClick={() => setShowOfferModal(false)} className="flex-1 h-9 rounded-lg border border-[#1e293b] text-sm text-slate-400 hover:text-white transition-colors">
+              取消
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Reject Offer Modal - 拒绝Offer */}
+      <Modal isOpen={showRejectOfferModal} onClose={() => setShowRejectOfferModal(false)} title="拒绝Offer">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 rounded-lg bg-red-500/5 border border-red-500/20 p-3">
+            <AlertCircle className="h-5 w-5 text-red-400 shrink-0" />
+            <p className="text-xs text-red-400">确认该候选人拒绝了Offer，将标记为已淘汰</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">拒绝原因</label>
+            <select id="reject-reason-select" className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none">
+              <option value="salary">薪资不满意</option>
+              <option value="other_offer">接受了其他Offer</option>
+              <option value="personal">个人原因</option>
+              <option value="location">工作地点不合适</option>
+              <option value="other">其他原因</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">详细备注</label>
+            <textarea id="reject-reason-detail" rows={3} placeholder="补充说明拒绝原因..." className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-slate-300 placeholder:text-slate-600 focus:border-sky-500/50 focus:outline-none resize-none" />
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={() => {
+                const reasonSelect = document.getElementById('reject-reason-select') as HTMLSelectElement;
+                const reasonDetail = document.getElementById('reject-reason-detail') as HTMLTextAreaElement;
+                handleConfirmRejectOffer(`${reasonSelect?.value || '未指定'}: ${reasonDetail?.value || ''}`);
+              }}
+              disabled={actionLoading === selectedCandidate}
+              className="flex-1 h-9 rounded-lg bg-red-500 text-sm font-medium text-white hover:bg-red-600 disabled:opacity-50 transition-colors"
+            >
+              {actionLoading === selectedCandidate ? '处理中...' : '确认拒绝'}
+            </button>
+            <button onClick={() => setShowRejectOfferModal(false)} className="flex-1 h-9 rounded-lg border border-[#1e293b] text-sm text-slate-400 hover:text-white transition-colors">
               取消
             </button>
           </div>
