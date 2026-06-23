@@ -1,6 +1,7 @@
 'use client';
 
 import { useAppContext } from '@/lib/app-context';
+import { useRouter } from 'next/navigation';
 import {
   Users,
   Briefcase,
@@ -29,6 +30,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
 
 export default function DashboardPage() {
   const { setActiveModule } = useAppContext();
+  const router = useRouter();
 
   return (
     <div className="space-y-4 md:space-y-5">
@@ -169,8 +171,8 @@ export default function DashboardPage() {
               <p className="mt-0.5 text-[11px] text-slate-500 md:text-xs">最近7天新增</p>
             </div>
             <button
-              onClick={() => setActiveModule('resumes')}
-              className="flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300"
+              onClick={() => router.push('/resumes')}
+              className="flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300 cursor-pointer"
             >
               查看全部 <ChevronRight className="h-3 w-3" />
             </button>
@@ -218,8 +220,8 @@ export default function DashboardPage() {
                 <p className="mt-0.5 text-[11px] text-slate-500 md:text-xs">本周安排</p>
               </div>
               <button
-                onClick={() => setActiveModule('interviews')}
-                className="flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300"
+                onClick={() => router.push('/interviews')}
+                className="flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300 cursor-pointer"
               >
                 排期管理 <ChevronRight className="h-3 w-3" />
               </button>
