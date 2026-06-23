@@ -17,6 +17,8 @@ import {
   User,
   X,
   Loader2,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { mockInterviews, mockInterviewers } from '@/lib/mock-data';
@@ -512,6 +514,47 @@ export default function InterviewsPage() {
                       <button className="flex h-8 items-center gap-1.5 rounded-lg border border-[#1e293b] px-3 text-xs text-slate-400 hover:text-white transition-colors">
                         <Video className="h-3.5 w-3.5" /> 会议链接
                       </button>
+                      {interview.status === 'scheduled' && (
+                        <>
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const token = document.cookie.split('; ').find(r => r.startsWith('auth_token='))?.split('=')[1];
+                              if (!token) return;
+                              const res = await fetch(`/api/interviews/${interview.id}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                body: JSON.stringify({ status: 'completed' }),
+                              });
+                              if (res.ok) {
+                                fetchInterviews();
+                              }
+                            }}
+                            className="flex h-8 items-center gap-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 text-xs font-medium text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                          >
+                            <CheckCircle className="h-3.5 w-3.5" /> 标记完成
+                          </button>
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (!confirm('确定要取消这个面试安排吗？')) return;
+                              const token = document.cookie.split('; ').find(r => r.startsWith('auth_token='))?.split('=')[1];
+                              if (!token) return;
+                              const res = await fetch(`/api/interviews/${interview.id}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                body: JSON.stringify({ status: 'cancelled' }),
+                              });
+                              if (res.ok) {
+                                fetchInterviews();
+                              }
+                            }}
+                            className="flex h-8 items-center gap-1.5 rounded-lg bg-red-500/10 border border-red-500/20 px-3 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors"
+                          >
+                            <XCircle className="h-3.5 w-3.5" /> 取消面试
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}

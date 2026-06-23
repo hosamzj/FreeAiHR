@@ -48,7 +48,31 @@ export async function PUT(
     const interview = await prisma.interview.update({
       where: { id },
       data: updateData,
+      include: {
+        candidate: { select: { id: true } },
+      },
     });
+
+    // Sync candidate status when interview status changes
+    if (body.status && interview.candidateId) {
+      let candidateStatus: string | null = null;
+      
+      if (body.status === 'completed') {
+        // When interview is completed, candidate status depends on the result
+        // For now, keep it as 'interview' until explicit pass/fail action
+        candidateStatus = null; // No automatic change
+      } else if (body.status === 'cancelled') {
+        // When interview is cancelled, candidate goes back to screening
+        candidateStatus = 'screening';
+      }
+      
+      if (candidateStatus) {
+        await prisma.candidate.update({
+          where: { id: interview.candidateId },
+          data: { status: candidateStatus },
+        });
+      }
+    }
 
     return success(interview);
   } catch (err) {

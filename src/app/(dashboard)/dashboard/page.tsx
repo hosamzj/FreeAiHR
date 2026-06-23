@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useAppContext } from '@/lib/app-context';
 import { useRouter } from 'next/navigation';
 import {
@@ -28,29 +29,94 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   clock: Clock,
 };
 
+interface DashboardStats {
+  totalCandidates: number;
+  interviewing: number;
+  pendingOffer: number;
+  hired: number;
+  scheduledInterviews: number;
+}
+
 export default function DashboardPage() {
   const { setActiveModule } = useAppContext();
   const router = useRouter();
+  const [stats, setStats] = useState<DashboardStats>({
+    totalCandidates: 0,
+    interviewing: 0,
+    pendingOffer: 0,
+    hired: 0,
+    scheduledInterviews: 0,
+  });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const [candidatesRes, interviewsRes] = await Promise.all([
+          fetch('/api/candidates?pageSize=1000'),
+          fetch('/api/interviews'),
+        ]);
+        
+        if (candidatesRes.ok) {
+          const candidatesData = await candidatesRes.json();
+          const candidates = candidatesData.data?.candidates || [];
+          
+          setStats(prev => ({
+            ...prev,
+            totalCandidates: candidates.length,
+            interviewing: candidates.filter((c: { status: string }) => c.status === 'interview').length,
+            pendingOffer: candidates.filter((c: { status: string }) => c.status === 'offer').length,
+            hired: candidates.filter((c: { status: string }) => c.status === 'hired').length,
+          }));
+        }
+        
+        if (interviewsRes.ok) {
+          const interviewsData = await interviewsRes.json();
+          const interviews = interviewsData.data || [];
+          
+          setStats(prev => ({
+            ...prev,
+            scheduledInterviews: interviews.filter((i: { status: string }) => i.status === 'scheduled').length,
+          }));
+        }
+      } catch (err) {
+        console.error('Failed to fetch dashboard stats:', err);
+      }
+    };
+
+    fetchStats();
+  }, []);
+
+  // Dynamic stats based on real data
+  const dashboardStats = [
+    { label: '总候选人', value: stats.totalCandidates, iconKey: 'users', color: 'bg-sky-500/10', change: 0 },
+    { label: '面试中', value: stats.interviewing, iconKey: 'calendar', color: 'bg-orange-500/10', change: 0 },
+    { label: '待Offer', value: stats.pendingOffer, iconKey: 'filecheck', color: 'bg-emerald-500/10', change: 0 },
+    { label: '已入职', value: stats.hired, iconKey: 'trendingup', color: 'bg-violet-500/10', change: 0 },
+    { label: '待面试', value: stats.scheduledInterviews, iconKey: 'clock', color: 'bg-amber-500/10', change: 0 },
+    { label: '职位数', value: mockRecruitmentStats[5]?.value || 12, iconKey: 'briefcase', color: 'bg-pink-500/10', change: 0 },
+  ];
 
   return (
     <div className="space-y-4 md:space-y-5">
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-2.5 md:gap-3 lg:grid-cols-3 xl:grid-cols-6">
-        {mockRecruitmentStats.map((stat) => {
+        {dashboardStats.map((stat) => {
           const Icon = iconMap[stat.iconKey] || Briefcase;
-          const isPositive = stat.change >= 0;
           return (
-            <div key={stat.label} className="card-hover rounded-xl border border-[#1e293b] bg-[#111827] p-3 md:p-4">
+            <div 
+              key={stat.label} 
+              className="card-hover cursor-pointer rounded-xl border border-[#1e293b] bg-[#111827] p-3 md:p-4"
+              onClick={() => {
+                if (stat.label === '面试中' || stat.label === '待面试') {
+                  router.push('/interviews');
+                } else if (stat.label === '总候选人') {
+                  router.push('/resumes');
+                }
+              }}
+            >
               <div className="flex items-center justify-between">
                 <div className={cn('rounded-lg p-1.5 md:p-2', stat.color)}>
                   <Icon className={cn('h-3.5 w-3.5 md:h-4 md:w-4', stat.color.replace('/10', '').replace('bg-', 'text-'))} />
-                </div>
-                <div className={cn(
-                  'flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
-                  isPositive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
-                )}>
-                  {isPositive ? <ArrowUpRight className="h-2.5 w-2.5" /> : <ArrowDownRight className="h-2.5 w-2.5" />}
-                  {Math.abs(stat.change)}%
                 </div>
               </div>
               <div className="mt-2.5 md:mt-3">

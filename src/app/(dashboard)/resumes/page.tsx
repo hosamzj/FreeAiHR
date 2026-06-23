@@ -48,6 +48,21 @@ export default function ResumesPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showResumePreview, setShowResumePreview] = useState(false);
   const [resumePreviewData, setResumePreviewData] = useState<{ id: string; name: string; position?: string; resumeUrl?: string } | null>(null);
+
+  // Interview scheduling state
+  const [interviewers, setInterviewers] = useState<{ id: string; name: string; department?: string }[]>([]);
+  const [interviewMethods, setInterviewMethods] = useState<{ id: string; name: string }[]>([]);
+  const [scheduleForm, setScheduleForm] = useState({
+    interviewerId: '',
+    methodId: '',
+    type: 'first',
+    date: '',
+    time: '',
+    duration: 60,
+    location: '',
+    notes: '',
+  });
+  const [scheduleLoading, setScheduleLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch candidates from database on mount
@@ -179,10 +194,127 @@ export default function ResumesPage() {
     }
   }, []);
 
-  const handleScheduleInterview = useCallback((candidateId: string, candidateName: string) => {
+  const handleScheduleInterview = useCallback(async (candidateId: string, candidateName: string) => {
     setSelectedCandidate(candidateId);
     setShowScheduleModal(true);
+    
+    // Fetch interviewers and interview methods
+    try {
+      const [interviewersRes, methodsRes] = await Promise.all([
+        fetch('/api/users?role=interviewer'),
+        fetch('/api/system/interview-methods'),
+      ]);
+      
+      if (interviewersRes.ok) {
+        const interviewersData = await interviewersRes.json();
+        const users = Array.isArray(interviewersData?.data) 
+          ? interviewersData.data 
+          : Array.isArray(interviewersData?.data?.users) 
+            ? interviewersData.data.users 
+            : [];
+        setInterviewers(users.map((u: { id: string; name: string; department?: string }) => ({ 
+          id: u.id, 
+          name: u.name, 
+          department: u.department 
+        })));
+      }
+      
+      if (methodsRes.ok) {
+        const methodsData = await methodsRes.json();
+        const methods = Array.isArray(methodsData?.data) ? methodsData.data : [];
+        setInterviewMethods(methods.map((m: { id: string; name: string }) => ({ id: m.id, name: m.name })));
+      }
+    } catch (error) {
+      console.error('Failed to fetch interview data:', error);
+    }
+    
+    // Reset form
+    setScheduleForm({
+      interviewerId: '',
+      methodId: '',
+      type: 'first',
+      date: '',
+      time: '',
+      duration: 60,
+      location: '',
+      notes: '',
+    });
   }, []);
+
+  // Submit schedule interview - creates interview record and updates candidate status
+  const handleSubmitSchedule = useCallback(async () => {
+    if (!selectedCandidate) return;
+    
+    const candidate = candidates.find(c => c.id === selectedCandidate);
+    if (!candidate) return;
+    
+    // Validate form
+    if (!scheduleForm.interviewerId) {
+      alert('请选择面试官');
+      return;
+    }
+    if (!scheduleForm.methodId) {
+      alert('请选择面试方式');
+      return;
+    }
+    if (!scheduleForm.date || !scheduleForm.time) {
+      alert('请选择面试日期和时间');
+      return;
+    }
+    
+    setScheduleLoading(true);
+    try {
+      // Combine date and time into ISO string
+      const scheduledAt = new Date(`${scheduleForm.date}T${scheduleForm.time}`).toISOString();
+      
+      // Create interview record
+      const interviewRes = await fetch('/api/interviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          candidateId: selectedCandidate,
+          candidateName: candidate.name,
+          candidatePosition: candidate.position,
+          interviewerId: scheduleForm.interviewerId,
+          type: scheduleForm.type,
+          method: scheduleForm.methodId,
+          scheduledAt,
+          duration: scheduleForm.duration,
+          location: scheduleForm.location,
+          notes: scheduleForm.notes,
+        }),
+      });
+      
+      if (!interviewRes.ok) {
+        const errorData = await interviewRes.json();
+        throw new Error(errorData.message || '创建面试失败');
+      }
+      
+      // Update candidate status to 'interview'
+      const candidateRes = await fetch(`/api/candidates/${selectedCandidate}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'interview' }),
+      });
+      
+      if (!candidateRes.ok) {
+        console.warn('Failed to update candidate status, but interview was created');
+      }
+      
+      // Update local state
+      setCandidates(prev => prev.map(c =>
+        c.id === selectedCandidate ? { ...c, status: 'interview' as const } : c
+      ));
+      
+      setShowScheduleModal(false);
+      alert(`已为 ${candidate.name} 安排面试`);
+    } catch (error) {
+      console.error('Failed to schedule interview:', error);
+      alert(error instanceof Error ? error.message : '安排面试失败，请重试');
+    } finally {
+      setScheduleLoading(false);
+    }
+  }, [selectedCandidate, candidates, scheduleForm]);
 
   const handleReject = useCallback(async (candidateId: string, candidateName: string) => {
     if (!confirm(`确定要淘汰 ${candidateName} 吗？`)) return;
@@ -871,54 +1003,125 @@ export default function ResumesPage() {
       {/* Schedule Interview Modal */}
       <Modal isOpen={showScheduleModal} onClose={() => setShowScheduleModal(false)} title="安排面试">
         <div className="space-y-4">
+          {/* Candidate Info */}
+          {(() => {
+            const candidate = candidates.find(c => c.id === selectedCandidate);
+            return candidate ? (
+              <div className="flex items-center gap-3 rounded-lg bg-sky-500/5 border border-sky-500/20 p-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-sky-500/20 to-blue-600/20 text-xs font-bold text-sky-400">
+                  {candidate.avatar}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-white">{candidate.name}</p>
+                  <p className="text-xs text-slate-500">{candidate.position}</p>
+                </div>
+              </div>
+            ) : null;
+          })()}
+          
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1.5">面试轮次</label>
-            <select className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none">
+            <select 
+              value={scheduleForm.type}
+              onChange={(e) => setScheduleForm(prev => ({ ...prev, type: e.target.value }))}
+              className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none"
+            >
               <option value="first">初面</option>
               <option value="second">复面</option>
               <option value="final">终面</option>
             </select>
           </div>
+          
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1.5">面试官</label>
-            <select className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none">
-              <option value="1">张经理 - 技术总监</option>
-              <option value="2">李主管 - 前端负责人</option>
-              <option value="3">王总监 - CTO</option>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">面试官 *</label>
+            <select 
+              value={scheduleForm.interviewerId}
+              onChange={(e) => setScheduleForm(prev => ({ ...prev, interviewerId: e.target.value }))}
+              className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none"
+            >
+              <option value="">请选择面试官</option>
+              {interviewers.map(i => (
+                <option key={i.id} value={i.id}>{i.name}{i.department ? ` - ${i.department}` : ''}</option>
+              ))}
             </select>
           </div>
+          
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1.5">面试日期</label>
-            <input type="date" className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none" />
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">面试方式 *</label>
+            <select 
+              value={scheduleForm.methodId}
+              onChange={(e) => setScheduleForm(prev => ({ ...prev, methodId: e.target.value }))}
+              className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none"
+            >
+              <option value="">请选择面试方式</option>
+              {interviewMethods.map(m => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1.5">面试时间</label>
-            <input type="time" className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1.5">面试方式</label>
-            <div className="flex gap-2">
-              <button className="flex-1 h-9 rounded-lg bg-sky-500/10 border border-sky-500/30 text-xs text-sky-400">视频面试</button>
-              <button className="flex-1 h-9 rounded-lg border border-[#1e293b] text-xs text-slate-400 hover:text-white transition-colors">现场面试</button>
-              <button className="flex-1 h-9 rounded-lg border border-[#1e293b] text-xs text-slate-400 hover:text-white transition-colors">电话面试</button>
+          
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1.5">面试日期 *</label>
+              <input 
+                type="date" 
+                value={scheduleForm.date}
+                onChange={(e) => setScheduleForm(prev => ({ ...prev, date: e.target.value }))}
+                className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none" 
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1.5">面试时间 *</label>
+              <input 
+                type="time" 
+                value={scheduleForm.time}
+                onChange={(e) => setScheduleForm(prev => ({ ...prev, time: e.target.value }))}
+                className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none" 
+              />
             </div>
           </div>
+          
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">时长（分钟）</label>
+            <input 
+              type="number" 
+              value={scheduleForm.duration}
+              onChange={(e) => setScheduleForm(prev => ({ ...prev, duration: parseInt(e.target.value) || 60 }))}
+              min={15}
+              max={180}
+              className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none" 
+            />
+          </div>
+          
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">面试地点/链接</label>
+            <input 
+              type="text"
+              value={scheduleForm.location}
+              onChange={(e) => setScheduleForm(prev => ({ ...prev, location: e.target.value }))}
+              placeholder="线下填地址，线上填会议链接"
+              className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 placeholder:text-slate-600 focus:border-sky-500/50 focus:outline-none" 
+            />
+          </div>
+          
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1.5">备注</label>
-            <textarea rows={3} placeholder="面试注意事项或特殊要求..." className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-slate-300 placeholder:text-slate-600 focus:border-sky-500/50 focus:outline-none resize-none" />
+            <textarea 
+              rows={2} 
+              value={scheduleForm.notes}
+              onChange={(e) => setScheduleForm(prev => ({ ...prev, notes: e.target.value }))}
+              placeholder="面试注意事项或特殊要求..." 
+              className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-slate-300 placeholder:text-slate-600 focus:border-sky-500/50 focus:outline-none resize-none" 
+            />
           </div>
+          
           <div className="flex gap-2 pt-2">
-            <button onClick={() => {
-              if (selectedCandidate) {
-                const candidate = candidates.find(c => c.id === selectedCandidate);
-                setCandidates(prev => prev.map(c =>
-                  c.id === selectedCandidate ? { ...c, status: 'interview' as const } : c
-                ));
-                setShowScheduleModal(false);
-                alert(`已为 ${candidate?.name || '候选人'} 安排面试`);
-              }
-            }} className="flex-1 h-9 rounded-lg bg-sky-500 text-sm font-medium text-white hover:bg-sky-600 transition-colors">
-              确认安排
+            <button 
+              onClick={handleSubmitSchedule}
+              disabled={scheduleLoading}
+              className="flex-1 h-9 rounded-lg bg-sky-500 text-sm font-medium text-white hover:bg-sky-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {scheduleLoading ? '安排中...' : '确认安排'}
             </button>
             <button onClick={() => setShowScheduleModal(false)} className="flex-1 h-9 rounded-lg border border-[#1e293b] text-sm text-slate-400 hover:text-white transition-colors">
               取消
