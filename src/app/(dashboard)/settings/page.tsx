@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import {
   Settings, Shield, Key, Building2, Save, Loader2, Check,
-  Globe, Lock, Mail, Download, Bot, AlertTriangle, ExternalLink,
+  Globe, Lock, Mail, Download, Bot, AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -40,12 +40,6 @@ interface SystemCfg {
   smsNotification: boolean;
 }
 
-interface PlatformApiCfg {
-  apiKey: string;
-  apiSecret: string;
-  enabled: boolean;
-}
-
 interface RpaCfg {
   scriptType: 'selenium' | 'playwright' | 'requests';
   username: string;
@@ -57,13 +51,7 @@ interface RpaCfg {
 }
 
 interface CollectionCfg {
-  defaultMode: 'mock' | 'platform' | 'rpa';
-  platforms: {
-    job51: PlatformApiCfg;
-    boss: PlatformApiCfg;
-    lagou: PlatformApiCfg;
-    liepin: PlatformApiCfg;
-  };
+  defaultMode: 'mock' | 'rpa';
   rpa: RpaCfg;
 }
 
@@ -86,12 +74,6 @@ export default function SettingsPage() {
   });
   const [collectionCfg, setCollectionCfg] = useState<CollectionCfg>({
     defaultMode: 'mock',
-    platforms: {
-      job51: { apiKey: '', apiSecret: '', enabled: false },
-      boss: { apiKey: '', apiSecret: '', enabled: false },
-      lagou: { apiKey: '', apiSecret: '', enabled: false },
-      liepin: { apiKey: '', apiSecret: '', enabled: false },
-    },
     rpa: {
       scriptType: 'playwright',
       username: '',
@@ -149,20 +131,6 @@ export default function SettingsPage() {
     { id: 'general' as TabId, label: '基础配置', icon: Building2 },
     { id: 'collection' as TabId, label: '采集配置', icon: Download },
   ];
-
-  const platformNames: Record<string, string> = {
-    job51: '51job（前程无忧）',
-    boss: 'Boss直聘',
-    lagou: '拉勾网',
-    liepin: '猎聘',
-  };
-
-  const platformLinks: Record<string, string> = {
-    job51: 'https://open.51job.com',
-    boss: 'https://open.zhipin.com',
-    lagou: 'https://open.lagou.com',
-    liepin: 'https://open.liepin.com',
-  };
 
   return (
     <div className="space-y-6">
@@ -359,11 +327,10 @@ export default function SettingsPage() {
               <h3 className="text-lg font-medium text-white">默认采集模式</h3>
               <p className="text-sm text-slate-400 mt-1">设置简历采集的默认模式</p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {[
-                { id: 'mock' as const, label: '模拟采集', desc: '随机生成候选人数据', color: 'slate' },
-                { id: 'platform' as const, label: '平台API', desc: '调用招聘平台开放API', color: 'sky' },
-                { id: 'rpa' as const, label: 'RPA爬虫', desc: '自动化脚本采集', color: 'orange' },
+                { id: 'mock' as const, label: '模拟采集', desc: '随机生成候选人数据，用于演示和测试', color: 'slate' },
+                { id: 'rpa' as const, label: 'RPA爬虫', desc: '自动化脚本采集，实验性功能', color: 'orange' },
               ].map((mode) => (
                 <button
                   key={mode.id}
@@ -378,83 +345,6 @@ export default function SettingsPage() {
                   <p className="text-sm font-medium text-white">{mode.label}</p>
                   <p className="text-xs text-slate-400 mt-1">{mode.desc}</p>
                 </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Platform API Keys */}
-          <div className="bg-[#111827] border border-slate-800 rounded-xl p-6 space-y-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-medium text-white">平台API配置</h3>
-                <p className="text-sm text-slate-400 mt-1">配置各招聘平台的API Key，用于平台API模式采集</p>
-              </div>
-              <a
-                href="https://open.51job.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300"
-              >
-                申请API Key <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
-            <div className="space-y-4">
-              {Object.entries(collectionCfg.platforms).map(([key, platform]) => (
-                <div key={key} className="p-4 bg-[#0a0e1a] border border-slate-700 rounded-lg space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-white">{platformNames[key]}</span>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={platform.enabled}
-                        onChange={(e) => setCollectionCfg({
-                          ...collectionCfg,
-                          platforms: {
-                            ...collectionCfg.platforms,
-                            [key]: { ...platform, enabled: e.target.checked },
-                          },
-                        })}
-                        className="sr-only peer"
-                      />
-                      <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500"></div>
-                    </label>
-                  </div>
-                  {platform.enabled && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                      <div>
-                        <label className="block text-xs text-slate-400 mb-1">API Key</label>
-                        <input
-                          value={platform.apiKey}
-                          onChange={(e) => setCollectionCfg({
-                            ...collectionCfg,
-                            platforms: {
-                              ...collectionCfg.platforms,
-                              [key]: { ...platform, apiKey: e.target.value },
-                            },
-                          })}
-                          placeholder="输入API Key"
-                          className="w-full px-3 py-2 bg-[#111827] border border-slate-600 rounded text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-slate-400 mb-1">API Secret</label>
-                        <input
-                          type="password"
-                          value={platform.apiSecret}
-                          onChange={(e) => setCollectionCfg({
-                            ...collectionCfg,
-                            platforms: {
-                              ...collectionCfg.platforms,
-                              [key]: { ...platform, apiSecret: e.target.value },
-                            },
-                          })}
-                          placeholder="输入API Secret"
-                          className="w-full px-3 py-2 bg-[#111827] border border-slate-600 rounded text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
               ))}
             </div>
           </div>

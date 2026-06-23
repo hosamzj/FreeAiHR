@@ -20,20 +20,19 @@ import {
   DollarSign,
   Users,
   RefreshCw,
-  ExternalLink,
   Trash2,
   Bot,
-  Key,
   FlaskConical,
   Zap,
   Shield,
   Clock,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Modal } from '@/components/ui/modal';
 
-// Collection modes
-type CollectionMode = 'mock' | 'platform_api' | 'rpa';
+// Collection modes - only mock and RPA (platform API removed as 51job/Boss don't have open APIs)
+type CollectionMode = 'mock' | 'rpa';
 
 interface CollectionModeConfig {
   id: CollectionMode;
@@ -54,17 +53,9 @@ const COLLECTION_MODES: CollectionModeConfig[] = [
     badgeColor: 'bg-emerald-500/10 text-emerald-400',
   },
   {
-    id: 'platform_api',
-    name: '平台API',
-    description: '通过招聘平台开放API获取真实数据',
-    icon: <Key className="h-5 w-5" />,
-    badge: '高级',
-    badgeColor: 'bg-sky-500/10 text-sky-400',
-  },
-  {
     id: 'rpa',
     name: 'RPA爬虫',
-    description: '自动化脚本采集，需配置登录凭证',
+    description: '通过浏览器自动化工具采集，需自行配置登录态',
     icon: <Bot className="h-5 w-5" />,
     badge: '实验性',
     badgeColor: 'bg-orange-500/10 text-orange-400',
@@ -115,14 +106,6 @@ const PRESET_CHANNELS: Channel[] = [
 const LOCATIONS = ['北京', '上海', '广州', '深圳', '杭州', '成都', '南京', '武汉', '西安', '苏州'];
 const EDUCATIONS = ['不限', '大专', '本科', '硕士', '博士'];
 
-// API Key format hints
-const API_KEY_HINTS: Record<string, { prefix: string; applyUrl: string }> = {
-  '51job': { prefix: 'job_', applyUrl: 'https://open.51job.com' },
-  'boss': { prefix: 'boss_', applyUrl: 'https://open.zhipin.com' },
-  'lagou': { prefix: 'lg_', applyUrl: 'https://open.lagou.com' },
-  'liepin': { prefix: 'lp_', applyUrl: 'https://open.liepin.com' },
-};
-
 export default function CollectionPage() {
   const [channels, setChannels] = useState<Channel[]>(PRESET_CHANNELS);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
@@ -140,11 +123,6 @@ export default function CollectionPage() {
   const [configSalaryMin, setConfigSalaryMin] = useState('15');
   const [configSalaryMax, setConfigSalaryMax] = useState('40');
   const [configCount, setConfigCount] = useState('20');
-
-  // Platform API config
-  const [platformApiKey, setPlatformApiKey] = useState('');
-  const [platformApiSecret, setPlatformApiSecret] = useState('');
-  const [apiKeyError, setApiKeyError] = useState('');
 
   // RPA config
   const [rpaScriptType, setRpaScriptType] = useState('selenium');
@@ -199,31 +177,11 @@ export default function CollectionPage() {
     setChannels(prev => prev.filter(c => c.id !== channelId));
   }, []);
 
-  // Validate API key format
-  const validateApiKey = useCallback((key: string, platformId: string): boolean => {
-    const hint = API_KEY_HINTS[platformId];
-    if (!hint) return key.length >= 16;
-    return key.startsWith(hint.prefix) && key.length >= 16;
-  }, []);
-
   // Handle start collection based on mode
   const handleStartCollection = useCallback(async () => {
     if (!selectedChannel || !configKeyword) return;
 
-    // Validate based on mode
-    if (collectionMode === 'platform_api') {
-      if (!platformApiKey) {
-        setApiKeyError('请先配置 API Key');
-        return;
-      }
-      if (!validateApiKey(platformApiKey, selectedChannel.id)) {
-        const hint = API_KEY_HINTS[selectedChannel.id];
-        setApiKeyError(`API Key 格式无效，${hint ? `应以 "${hint.prefix}" 开头` : '请检查格式'}`);
-        return;
-      }
-      setApiKeyError('');
-    }
-
+    // Validate RPA credentials
     if (collectionMode === 'rpa') {
       if (!rpaUsername || !rpaPassword) {
         alert('请先配置登录凭证');
@@ -260,15 +218,6 @@ export default function CollectionPage() {
       switch (collectionMode) {
         case 'mock':
           apiUrl = '/api/candidates/generate';
-          break;
-        case 'platform_api':
-          apiUrl = '/api/candidates/platform-api';
-          requestBody = {
-            ...requestBody,
-            platform: selectedChannel.id,
-            apiKey: platformApiKey,
-            apiSecret: platformApiSecret,
-          };
           break;
         case 'rpa':
           apiUrl = '/api/candidates/scrape';
@@ -309,7 +258,7 @@ export default function CollectionPage() {
         setCollectProgress(0);
       }, 500);
     }
-  }, [selectedChannel, configKeyword, configLocation, configEducation, configSalaryMin, configSalaryMax, configCount, collectionMode, platformApiKey, platformApiSecret, rpaScriptType, rpaUsername, rpaPassword, rpaDelay, rpaProxy, rpaUARotate, validateApiKey]);
+  }, [selectedChannel, configKeyword, configLocation, configEducation, configSalaryMin, configSalaryMax, configCount, collectionMode, rpaScriptType, rpaUsername, rpaPassword, rpaDelay, rpaProxy, rpaUARotate]);
 
   // Handle select all
   const handleSelectAll = useCallback(() => {
@@ -432,11 +381,6 @@ export default function CollectionPage() {
               {collectionMode === 'rpa' && (
                 <span className="rounded-full bg-orange-500/10 px-2 py-0.5 text-[10px] text-orange-400">
                   爬虫采集
-                </span>
-              )}
-              {collectionMode === 'platform_api' && (
-                <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[10px] text-sky-400">
-                  平台API
                 </span>
               )}
             </div>
@@ -577,11 +521,9 @@ export default function CollectionPage() {
               <p className="text-sm font-medium text-white mb-1">
                 正在从 {selectedChannel?.name} 采集简历...
                 {collectionMode === 'rpa' && ' (RPA模式)'}
-                {collectionMode === 'platform_api' && ' (API模式)'}
               </p>
               <p className="text-xs text-slate-500 mb-4">
                 {collectionMode === 'mock' && 'AI 正在生成候选人数据'}
-                {collectionMode === 'platform_api' && '正在调用平台API获取数据'}
                 {collectionMode === 'rpa' && '爬虫脚本正在执行...'}
               </p>
               <div className="mx-auto max-w-xs">
@@ -599,7 +541,7 @@ export default function CollectionPage() {
               {/* Collection Mode Selector */}
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-2">采集模式</label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {COLLECTION_MODES.map(mode => (
                     <button
                       key={mode.id}
@@ -636,56 +578,17 @@ export default function CollectionPage() {
                 </p>
               </div>
 
-              {/* Platform API Config */}
-              {collectionMode === 'platform_api' && (
-                <div className="rounded-lg border border-sky-500/20 bg-sky-500/5 p-3 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Key className="h-4 w-4 text-sky-400" />
-                    <span className="text-xs font-medium text-sky-400">平台API配置</span>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1.5">
-                      API Key *
-                      <span className="ml-2 text-[10px] text-slate-500 font-normal">
-                        (格式: {API_KEY_HINTS[selectedChannel?.id || '']?.prefix || ''}***，至少16位)
-                      </span>
-                    </label>
-                    <input
-                      type="text"
-                      value={platformApiKey}
-                      onChange={(e) => { setPlatformApiKey(e.target.value); setApiKeyError(''); }}
-                      placeholder={`输入 ${selectedChannel?.name} 的 API Key`}
-                      className={cn(
-                        'w-full h-9 rounded-lg border bg-[#0a0e1a] px-3 text-sm text-slate-300 placeholder:text-slate-600 focus:outline-none',
-                        apiKeyError ? 'border-red-500/50' : 'border-[#1e293b] focus:border-sky-500/50'
-                      )}
-                    />
-                    {apiKeyError && <p className="mt-1 text-[11px] text-red-400">{apiKeyError}</p>}
-                    <a
-                      href={API_KEY_HINTS[selectedChannel?.id || '']?.applyUrl || '#'}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-1 inline-flex items-center gap-1 text-[11px] text-sky-400 hover:text-sky-300"
-                    >
-                      <ExternalLink className="h-3 w-3" /> 申请 API Key
-                    </a>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1.5">API Secret (可选)</label>
-                    <input
-                      type="password"
-                      value={platformApiSecret}
-                      onChange={(e) => setPlatformApiSecret(e.target.value)}
-                      placeholder="输入 API Secret"
-                      className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 placeholder:text-slate-600 focus:border-sky-500/50 focus:outline-none"
-                    />
-                  </div>
-                </div>
-              )}
-
               {/* RPA Config */}
               {collectionMode === 'rpa' && (
                 <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-3 space-y-3">
+                  {/* Warning Banner */}
+                  <div className="flex items-start gap-2 rounded-lg bg-orange-500/10 border border-orange-500/20 p-2.5">
+                    <AlertTriangle className="h-4 w-4 text-orange-400 shrink-0 mt-0.5" />
+                    <div className="text-[11px] text-orange-300 leading-relaxed">
+                      <p className="font-medium mb-0.5">注意：RPA爬虫模式需要用户自行在浏览器中登录目标网站，配置Cookie和爬虫参数。</p>
+                      <p>该模式可能违反目标网站的服务条款，<span className="font-medium">建议仅用于内部测试，不要商用</span>。</p>
+                    </div>
+                  </div>
                   <div className="flex items-center gap-2">
                     <FlaskConical className="h-4 w-4 text-orange-400" />
                     <span className="text-xs font-medium text-orange-400">RPA爬虫配置 (实验性)</span>

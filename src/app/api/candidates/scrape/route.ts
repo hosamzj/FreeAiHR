@@ -102,6 +102,7 @@ export async function POST(request: NextRequest) {
       mode: 'rpa',
       scriptType,
       message: `[实验性功能] 爬虫采集完成，共获取 ${candidates.length} 条数据`,
+      warning: 'RPA爬虫模式为实验性功能，可能违反目标网站服务条款，建议仅用于内部测试，不要商用。',
     });
   } catch (err) {
     console.error('Scrape candidates error:', err);
