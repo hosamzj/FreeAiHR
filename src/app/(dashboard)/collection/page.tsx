@@ -22,9 +22,54 @@ import {
   RefreshCw,
   ExternalLink,
   Trash2,
+  Bot,
+  Key,
+  FlaskConical,
+  Zap,
+  Shield,
+  Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Modal } from '@/components/ui/modal';
+
+// Collection modes
+type CollectionMode = 'mock' | 'platform_api' | 'rpa';
+
+interface CollectionModeConfig {
+  id: CollectionMode;
+  name: string;
+  description: string;
+  icon: React.ReactNode;
+  badge?: string;
+  badgeColor?: string;
+}
+
+const COLLECTION_MODES: CollectionModeConfig[] = [
+  {
+    id: 'mock',
+    name: '模拟采集',
+    description: '使用数据池随机生成候选人，适合演示和测试',
+    icon: <Sparkles className="h-5 w-5" />,
+    badge: '推荐',
+    badgeColor: 'bg-emerald-500/10 text-emerald-400',
+  },
+  {
+    id: 'platform_api',
+    name: '平台API',
+    description: '通过招聘平台开放API获取真实数据',
+    icon: <Key className="h-5 w-5" />,
+    badge: '高级',
+    badgeColor: 'bg-sky-500/10 text-sky-400',
+  },
+  {
+    id: 'rpa',
+    name: 'RPA爬虫',
+    description: '自动化脚本采集，需配置登录凭证',
+    icon: <Bot className="h-5 w-5" />,
+    badge: '实验性',
+    badgeColor: 'bg-orange-500/10 text-orange-400',
+  },
+];
 
 // Channel types
 interface Channel {
@@ -70,12 +115,23 @@ const PRESET_CHANNELS: Channel[] = [
 const LOCATIONS = ['北京', '上海', '广州', '深圳', '杭州', '成都', '南京', '武汉', '西安', '苏州'];
 const EDUCATIONS = ['不限', '大专', '本科', '硕士', '博士'];
 
+// API Key format hints
+const API_KEY_HINTS: Record<string, { prefix: string; applyUrl: string }> = {
+  '51job': { prefix: 'job_', applyUrl: 'https://open.51job.com' },
+  'boss': { prefix: 'boss_', applyUrl: 'https://open.zhipin.com' },
+  'lagou': { prefix: 'lg_', applyUrl: 'https://open.lagou.com' },
+  'liepin': { prefix: 'lp_', applyUrl: 'https://open.liepin.com' },
+};
+
 export default function CollectionPage() {
   const [channels, setChannels] = useState<Channel[]>(PRESET_CHANNELS);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [showAddChannelModal, setShowAddChannelModal] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showImportResultModal, setShowImportResultModal] = useState(false);
+
+  // Collection mode state
+  const [collectionMode, setCollectionMode] = useState<CollectionMode>('mock');
 
   // Config state
   const [configKeyword, setConfigKeyword] = useState('');
@@ -84,6 +140,19 @@ export default function CollectionPage() {
   const [configSalaryMin, setConfigSalaryMin] = useState('15');
   const [configSalaryMax, setConfigSalaryMax] = useState('40');
   const [configCount, setConfigCount] = useState('20');
+
+  // Platform API config
+  const [platformApiKey, setPlatformApiKey] = useState('');
+  const [platformApiSecret, setPlatformApiSecret] = useState('');
+  const [apiKeyError, setApiKeyError] = useState('');
+
+  // RPA config
+  const [rpaScriptType, setRpaScriptType] = useState('selenium');
+  const [rpaUsername, setRpaUsername] = useState('');
+  const [rpaPassword, setRpaPassword] = useState('');
+  const [rpaDelay, setRpaDelay] = useState('2');
+  const [rpaProxy, setRpaProxy] = useState(false);
+  const [rpaUARotate, setRpaUARotate] = useState(true);
 
   // Collection state
   const [isCollecting, setIsCollecting] = useState(false);
@@ -103,6 +172,7 @@ export default function CollectionPage() {
   const handleConnectChannel = useCallback((channel: Channel) => {
     setChannels(prev => prev.map(c => c.id === channel.id ? { ...c, connected: true } : c));
     setSelectedChannel({ ...channel, connected: true });
+    setCollectionMode('mock'); // Default to mock mode
     setShowConfigModal(true);
   }, []);
 
@@ -125,13 +195,41 @@ export default function CollectionPage() {
 
   // Handle remove channel
   const handleRemoveChannel = useCallback((channelId: string) => {
-    if (PRESET_CHANNELS.find(c => c.id === channelId)) return; // Can't remove preset
+    if (PRESET_CHANNELS.find(c => c.id === channelId)) return;
     setChannels(prev => prev.filter(c => c.id !== channelId));
   }, []);
 
-  // Handle start collection
+  // Validate API key format
+  const validateApiKey = useCallback((key: string, platformId: string): boolean => {
+    const hint = API_KEY_HINTS[platformId];
+    if (!hint) return key.length >= 16;
+    return key.startsWith(hint.prefix) && key.length >= 16;
+  }, []);
+
+  // Handle start collection based on mode
   const handleStartCollection = useCallback(async () => {
     if (!selectedChannel || !configKeyword) return;
+
+    // Validate based on mode
+    if (collectionMode === 'platform_api') {
+      if (!platformApiKey) {
+        setApiKeyError('请先配置 API Key');
+        return;
+      }
+      if (!validateApiKey(platformApiKey, selectedChannel.id)) {
+        const hint = API_KEY_HINTS[selectedChannel.id];
+        setApiKeyError(`API Key 格式无效，${hint ? `应以 "${hint.prefix}" 开头` : '请检查格式'}`);
+        return;
+      }
+      setApiKeyError('');
+    }
+
+    if (collectionMode === 'rpa') {
+      if (!rpaUsername || !rpaPassword) {
+        alert('请先配置登录凭证');
+        return;
+      }
+    }
 
     setIsCollecting(true);
     setCollectProgress(0);
@@ -144,22 +242,53 @@ export default function CollectionPage() {
           clearInterval(progressInterval);
           return 90;
         }
-        return prev + randomProgress();
+        return prev + Math.floor(Math.random() * 15) + 5;
       });
     }, 200);
 
     try {
-      const res = await fetch('/api/candidates/generate', {
+      let apiUrl = '';
+      let requestBody: Record<string, unknown> = {
+        keyword: configKeyword,
+        location: configLocation,
+        education: configEducation === '不限' ? '' : configEducation,
+        salaryRange: { min: parseInt(configSalaryMin), max: parseInt(configSalaryMax) },
+        count: parseInt(configCount),
+        source: selectedChannel.name,
+      };
+
+      switch (collectionMode) {
+        case 'mock':
+          apiUrl = '/api/candidates/generate';
+          break;
+        case 'platform_api':
+          apiUrl = '/api/candidates/platform-api';
+          requestBody = {
+            ...requestBody,
+            platform: selectedChannel.id,
+            apiKey: platformApiKey,
+            apiSecret: platformApiSecret,
+          };
+          break;
+        case 'rpa':
+          apiUrl = '/api/candidates/scrape';
+          requestBody = {
+            ...requestBody,
+            scriptType: rpaScriptType,
+            credentials: { username: rpaUsername, password: rpaPassword },
+            antiCrawl: {
+              delay: parseInt(rpaDelay),
+              proxy: rpaProxy,
+              uaRotate: rpaUARotate,
+            },
+          };
+          break;
+      }
+
+      const res = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          keyword: configKeyword,
-          location: configLocation,
-          education: configEducation === '不限' ? '' : configEducation,
-          salaryRange: { min: parseInt(configSalaryMin), max: parseInt(configSalaryMax) },
-          count: parseInt(configCount),
-          source: selectedChannel.name,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await res.json();
@@ -168,16 +297,19 @@ export default function CollectionPage() {
 
       if (data.code === 0 && data.data?.candidates) {
         setCollectedCandidates(data.data.candidates.map((c: GeneratedCandidate) => ({ ...c, selected: true })));
+      } else if (data.code !== 0) {
+        alert(data.message || '采集失败');
       }
     } catch (error) {
       console.error('Collection failed:', error);
+      alert('采集请求失败，请检查网络');
     } finally {
       setTimeout(() => {
         setIsCollecting(false);
         setCollectProgress(0);
       }, 500);
     }
-  }, [selectedChannel, configKeyword, configLocation, configEducation, configSalaryMin, configSalaryMax, configCount]);
+  }, [selectedChannel, configKeyword, configLocation, configEducation, configSalaryMin, configSalaryMax, configCount, collectionMode, platformApiKey, platformApiSecret, rpaScriptType, rpaUsername, rpaPassword, rpaDelay, rpaProxy, rpaUARotate, validateApiKey]);
 
   // Handle select all
   const handleSelectAll = useCallback(() => {
@@ -207,7 +339,6 @@ export default function CollectionPage() {
       if (data.code === 0 && data.data) {
         setImportResult(data.data);
         setShowImportResultModal(true);
-        // Remove imported candidates from list
         setCollectedCandidates(prev => prev.filter(c => !c.selected));
       }
     } catch (error) {
@@ -217,12 +348,19 @@ export default function CollectionPage() {
 
   const selectedCount = collectedCandidates.filter(c => c.selected).length;
 
+  // Get source tag style based on collection mode
+  const getSourceTagStyle = (source: string) => {
+    if (source.includes('爬虫')) return 'bg-orange-500/10 text-orange-400 border-orange-500/20';
+    if (source.includes('API')) return 'bg-sky-500/10 text-sky-400 border-sky-500/20';
+    return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
+  };
+
   return (
     <div className="space-y-4 md:space-y-5">
       {/* Page Title */}
       <div>
         <h1 className="text-lg md:text-xl font-bold text-white">简历采集</h1>
-        <p className="mt-0.5 text-xs text-slate-500">从招聘网站批量采集候选人简历，AI智能匹配导入系统</p>
+        <p className="mt-0.5 text-xs text-slate-500">从招聘网站批量采集候选人简历，支持多种采集模式</p>
       </div>
 
       {/* Channel Cards */}
@@ -291,6 +429,16 @@ export default function CollectionPage() {
               <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[10px] text-sky-400">
                 {collectedCandidates.length} 条简历
               </span>
+              {collectionMode === 'rpa' && (
+                <span className="rounded-full bg-orange-500/10 px-2 py-0.5 text-[10px] text-orange-400">
+                  爬虫采集
+                </span>
+              )}
+              {collectionMode === 'platform_api' && (
+                <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[10px] text-sky-400">
+                  平台API
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <div className="relative">
@@ -349,8 +497,8 @@ export default function CollectionPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium text-white">{candidate.name}</p>
-                    <span className="rounded-full bg-[#0a0e1a] px-1.5 py-0.5 text-[10px] text-slate-500 border border-[#1e293b]">
-                      来自 {candidate.source}
+                    <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] border', getSourceTagStyle(candidate.source))}>
+                      {candidate.source}
                     </span>
                   </div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
@@ -416,7 +564,7 @@ export default function CollectionPage() {
         </div>
       </Modal>
 
-      {/* Config Modal */}
+      {/* Config Modal with Collection Mode Selector */}
       <Modal isOpen={showConfigModal} onClose={() => setShowConfigModal(false)} title={`配置采集 - ${selectedChannel?.name || ''}`} size="lg">
         <div className="space-y-4">
           {isCollecting ? (
@@ -426,8 +574,16 @@ export default function CollectionPage() {
                 <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-sky-500 animate-spin" />
                 <Sparkles className="absolute inset-0 m-auto h-6 w-6 text-sky-400 ai-pulse" />
               </div>
-              <p className="text-sm font-medium text-white mb-1">正在从 {selectedChannel?.name} 采集简历...</p>
-              <p className="text-xs text-slate-500 mb-4">AI 正在分析并匹配候选人数据</p>
+              <p className="text-sm font-medium text-white mb-1">
+                正在从 {selectedChannel?.name} 采集简历...
+                {collectionMode === 'rpa' && ' (RPA模式)'}
+                {collectionMode === 'platform_api' && ' (API模式)'}
+              </p>
+              <p className="text-xs text-slate-500 mb-4">
+                {collectionMode === 'mock' && 'AI 正在生成候选人数据'}
+                {collectionMode === 'platform_api' && '正在调用平台API获取数据'}
+                {collectionMode === 'rpa' && '爬虫脚本正在执行...'}
+              </p>
               <div className="mx-auto max-w-xs">
                 <div className="h-2 overflow-hidden rounded-full bg-[#1e293b]">
                   <div
@@ -440,6 +596,178 @@ export default function CollectionPage() {
             </div>
           ) : (
             <>
+              {/* Collection Mode Selector */}
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-2">采集模式</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {COLLECTION_MODES.map(mode => (
+                    <button
+                      key={mode.id}
+                      onClick={() => setCollectionMode(mode.id)}
+                      className={cn(
+                        'relative flex flex-col items-center gap-1.5 rounded-lg border p-3 transition-all cursor-pointer',
+                        collectionMode === mode.id
+                          ? 'border-sky-500/50 bg-sky-500/10'
+                          : 'border-[#1e293b] bg-[#0a0e1a] hover:border-slate-600'
+                      )}
+                    >
+                      {mode.badge && (
+                        <span className={cn('absolute -top-1.5 right-1 rounded-full px-1.5 py-0.5 text-[9px]', mode.badgeColor)}>
+                          {mode.badge}
+                        </span>
+                      )}
+                      <div className={cn(
+                        'flex h-8 w-8 items-center justify-center rounded-lg',
+                        collectionMode === mode.id ? 'text-sky-400' : 'text-slate-500'
+                      )}>
+                        {mode.icon}
+                      </div>
+                      <span className={cn(
+                        'text-xs font-medium',
+                        collectionMode === mode.id ? 'text-white' : 'text-slate-400'
+                      )}>
+                        {mode.name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11px] text-slate-500">
+                  {COLLECTION_MODES.find(m => m.id === collectionMode)?.description}
+                </p>
+              </div>
+
+              {/* Platform API Config */}
+              {collectionMode === 'platform_api' && (
+                <div className="rounded-lg border border-sky-500/20 bg-sky-500/5 p-3 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Key className="h-4 w-4 text-sky-400" />
+                    <span className="text-xs font-medium text-sky-400">平台API配置</span>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1.5">
+                      API Key *
+                      <span className="ml-2 text-[10px] text-slate-500 font-normal">
+                        (格式: {API_KEY_HINTS[selectedChannel?.id || '']?.prefix || ''}***，至少16位)
+                      </span>
+                    </label>
+                    <input
+                      type="text"
+                      value={platformApiKey}
+                      onChange={(e) => { setPlatformApiKey(e.target.value); setApiKeyError(''); }}
+                      placeholder={`输入 ${selectedChannel?.name} 的 API Key`}
+                      className={cn(
+                        'w-full h-9 rounded-lg border bg-[#0a0e1a] px-3 text-sm text-slate-300 placeholder:text-slate-600 focus:outline-none',
+                        apiKeyError ? 'border-red-500/50' : 'border-[#1e293b] focus:border-sky-500/50'
+                      )}
+                    />
+                    {apiKeyError && <p className="mt-1 text-[11px] text-red-400">{apiKeyError}</p>}
+                    <a
+                      href={API_KEY_HINTS[selectedChannel?.id || '']?.applyUrl || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 inline-flex items-center gap-1 text-[11px] text-sky-400 hover:text-sky-300"
+                    >
+                      <ExternalLink className="h-3 w-3" /> 申请 API Key
+                    </a>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1.5">API Secret (可选)</label>
+                    <input
+                      type="password"
+                      value={platformApiSecret}
+                      onChange={(e) => setPlatformApiSecret(e.target.value)}
+                      placeholder="输入 API Secret"
+                      className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 placeholder:text-slate-600 focus:border-sky-500/50 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* RPA Config */}
+              {collectionMode === 'rpa' && (
+                <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-3 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <FlaskConical className="h-4 w-4 text-orange-400" />
+                    <span className="text-xs font-medium text-orange-400">RPA爬虫配置 (实验性)</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1.5">脚本类型</label>
+                      <select
+                        value={rpaScriptType}
+                        onChange={(e) => setRpaScriptType(e.target.value)}
+                        className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-orange-500/50 focus:outline-none"
+                      >
+                        <option value="selenium">Selenium</option>
+                        <option value="playwright">Playwright</option>
+                        <option value="requests">Requests</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1.5">请求延迟 (秒)</label>
+                      <input
+                        type="number"
+                        value={rpaDelay}
+                        onChange={(e) => setRpaDelay(e.target.value)}
+                        min="1"
+                        max="10"
+                        className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-orange-500/50 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1.5">登录账号 *</label>
+                      <input
+                        type="text"
+                        value={rpaUsername}
+                        onChange={(e) => setRpaUsername(e.target.value)}
+                        placeholder="平台登录账号"
+                        className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 placeholder:text-slate-600 focus:border-orange-500/50 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1.5">登录密码 *</label>
+                      <input
+                        type="password"
+                        value={rpaPassword}
+                        onChange={(e) => setRpaPassword(e.target.value)}
+                        placeholder="平台登录密码"
+                        className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 placeholder:text-slate-600 focus:border-orange-500/50 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 pt-1">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={rpaProxy}
+                        onChange={(e) => setRpaProxy(e.target.checked)}
+                        className="rounded border-[#1e293b] bg-[#0a0e1a] text-orange-500 focus:ring-orange-500/20"
+                      />
+                      <span className="text-xs text-slate-400 flex items-center gap-1">
+                        <Shield className="h-3 w-3" /> 代理轮换
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={rpaUARotate}
+                        onChange={(e) => setRpaUARotate(e.target.checked)}
+                        className="rounded border-[#1e293b] bg-[#0a0e1a] text-orange-500 focus:ring-orange-500/20"
+                      />
+                      <span className="text-xs text-slate-400 flex items-center gap-1">
+                        <Zap className="h-3 w-3" /> UA轮换
+                      </span>
+                    </label>
+                  </div>
+                  <p className="text-[10px] text-orange-400/60">
+                    注意：RPA爬虫为实验性功能，可能因平台反爬策略导致采集失败
+                  </p>
+                </div>
+              )}
+
+              {/* Common Config */}
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1.5">采集关键词 *</label>
                 <input
@@ -559,8 +887,4 @@ export default function CollectionPage() {
       </Modal>
     </div>
   );
-}
-
-function randomProgress(): number {
-  return Math.floor(Math.random() * 15) + 5;
 }

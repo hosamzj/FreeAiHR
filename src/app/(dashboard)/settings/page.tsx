@@ -4,11 +4,11 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import {
   Settings, Shield, Key, Building2, Save, Loader2, Check,
-  Globe, Lock, Mail,
+  Globe, Lock, Mail, Download, Bot, AlertTriangle, ExternalLink,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type TabId = 'sso' | 'password' | 'general';
+type TabId = 'sso' | 'password' | 'general' | 'collection';
 
 interface SSOCfg {
   enabled: boolean;
@@ -40,6 +40,33 @@ interface SystemCfg {
   smsNotification: boolean;
 }
 
+interface PlatformApiCfg {
+  apiKey: string;
+  apiSecret: string;
+  enabled: boolean;
+}
+
+interface RpaCfg {
+  scriptType: 'selenium' | 'playwright' | 'requests';
+  username: string;
+  password: string;
+  requestInterval: number;
+  randomDelay: boolean;
+  proxyRotation: boolean;
+  uaRotation: boolean;
+}
+
+interface CollectionCfg {
+  defaultMode: 'mock' | 'platform' | 'rpa';
+  platforms: {
+    job51: PlatformApiCfg;
+    boss: PlatformApiCfg;
+    lagou: PlatformApiCfg;
+    liepin: PlatformApiCfg;
+  };
+  rpa: RpaCfg;
+}
+
 export default function SettingsPage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabId>('sso');
@@ -57,21 +84,41 @@ export default function SettingsPage() {
   const [sysCfg, setSysCfg] = useState<SystemCfg>({
     companyName: 'AI智能招聘', logoUrl: '', emailNotification: true, smsNotification: true,
   });
+  const [collectionCfg, setCollectionCfg] = useState<CollectionCfg>({
+    defaultMode: 'mock',
+    platforms: {
+      job51: { apiKey: '', apiSecret: '', enabled: false },
+      boss: { apiKey: '', apiSecret: '', enabled: false },
+      lagou: { apiKey: '', apiSecret: '', enabled: false },
+      liepin: { apiKey: '', apiSecret: '', enabled: false },
+    },
+    rpa: {
+      scriptType: 'playwright',
+      username: '',
+      password: '',
+      requestInterval: 3,
+      randomDelay: true,
+      proxyRotation: false,
+      uaRotation: true,
+    },
+  });
 
   useEffect(() => {
     if (user?.role !== 'admin') return;
     fetch('/api/system/sso').then(r => r.json()).then(d => { if (d.code === 0) setSso(d.data); });
     fetch('/api/system/password-policy').then(r => r.json()).then(d => { if (d.code === 0) setPwdPolicy(d.data); });
     fetch('/api/system/config').then(r => r.json()).then(d => { if (d.code === 0) setSysCfg(d.data); });
+    // Collection config is stored locally for now
   }, [user]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const endpoints: Record<TabId, { url: string; body: unknown }> = {
+      const endpoints: Record<string, { url: string; body: unknown }> = {
         sso: { url: '/api/system/sso', body: sso },
         password: { url: '/api/system/password-policy', body: pwdPolicy },
         general: { url: '/api/system/config', body: sysCfg },
+        collection: { url: '/api/system/collection', body: collectionCfg },
       };
       const { url, body } = endpoints[activeTab];
       await fetch(url, {
@@ -100,7 +147,22 @@ export default function SettingsPage() {
     { id: 'sso' as TabId, label: 'SSO配置', icon: Globe },
     { id: 'password' as TabId, label: '密码策略', icon: Key },
     { id: 'general' as TabId, label: '基础配置', icon: Building2 },
+    { id: 'collection' as TabId, label: '采集配置', icon: Download },
   ];
+
+  const platformNames: Record<string, string> = {
+    job51: '51job（前程无忧）',
+    boss: 'Boss直聘',
+    lagou: '拉勾网',
+    liepin: '猎聘',
+  };
+
+  const platformLinks: Record<string, string> = {
+    job51: 'https://open.51job.com',
+    boss: 'https://open.zhipin.com',
+    lagou: 'https://open.lagou.com',
+    liepin: 'https://open.liepin.com',
+  };
 
   return (
     <div className="space-y-6">
@@ -110,7 +172,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-[#111827] border border-slate-800 rounded-xl p-1">
+      <div className="flex gap-1 bg-[#111827] border border-slate-800 rounded-xl p-1 overflow-x-auto">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           return (
@@ -118,7 +180,7 @@ export default function SettingsPage() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm rounded-lg transition-colors',
+                'flex-1 flex items-center justify-center gap-2 px-3 py-2.5 text-sm rounded-lg transition-colors whitespace-nowrap',
                 activeTab === tab.id ? 'bg-sky-500/10 text-sky-400' : 'text-slate-400 hover:text-slate-200'
               )}
             >
@@ -283,6 +345,230 @@ export default function SettingsPage() {
                 </div>
                 <input type="checkbox" checked={sysCfg.smsNotification} onChange={(e) => setSysCfg({ ...sysCfg, smsNotification: e.target.checked })} className="rounded border-slate-600" />
               </label>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Collection Config */}
+      {activeTab === 'collection' && (
+        <div className="space-y-6">
+          {/* Default Mode */}
+          <div className="bg-[#111827] border border-slate-800 rounded-xl p-6 space-y-5">
+            <div>
+              <h3 className="text-lg font-medium text-white">默认采集模式</h3>
+              <p className="text-sm text-slate-400 mt-1">设置简历采集的默认模式</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                { id: 'mock' as const, label: '模拟采集', desc: '随机生成候选人数据', color: 'slate' },
+                { id: 'platform' as const, label: '平台API', desc: '调用招聘平台开放API', color: 'sky' },
+                { id: 'rpa' as const, label: 'RPA爬虫', desc: '自动化脚本采集', color: 'orange' },
+              ].map((mode) => (
+                <button
+                  key={mode.id}
+                  onClick={() => setCollectionCfg({ ...collectionCfg, defaultMode: mode.id })}
+                  className={cn(
+                    'p-4 rounded-lg border text-left transition-colors',
+                    collectionCfg.defaultMode === mode.id
+                      ? 'border-sky-500 bg-sky-500/10'
+                      : 'border-slate-700 bg-[#0a0e1a] hover:border-slate-600'
+                  )}
+                >
+                  <p className="text-sm font-medium text-white">{mode.label}</p>
+                  <p className="text-xs text-slate-400 mt-1">{mode.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Platform API Keys */}
+          <div className="bg-[#111827] border border-slate-800 rounded-xl p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-medium text-white">平台API配置</h3>
+                <p className="text-sm text-slate-400 mt-1">配置各招聘平台的API Key，用于平台API模式采集</p>
+              </div>
+              <a
+                href="https://open.51job.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300"
+              >
+                申请API Key <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+            <div className="space-y-4">
+              {Object.entries(collectionCfg.platforms).map(([key, platform]) => (
+                <div key={key} className="p-4 bg-[#0a0e1a] border border-slate-700 rounded-lg space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-white">{platformNames[key]}</span>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={platform.enabled}
+                        onChange={(e) => setCollectionCfg({
+                          ...collectionCfg,
+                          platforms: {
+                            ...collectionCfg.platforms,
+                            [key]: { ...platform, enabled: e.target.checked },
+                          },
+                        })}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500"></div>
+                    </label>
+                  </div>
+                  {platform.enabled && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">API Key</label>
+                        <input
+                          value={platform.apiKey}
+                          onChange={(e) => setCollectionCfg({
+                            ...collectionCfg,
+                            platforms: {
+                              ...collectionCfg.platforms,
+                              [key]: { ...platform, apiKey: e.target.value },
+                            },
+                          })}
+                          placeholder="输入API Key"
+                          className="w-full px-3 py-2 bg-[#111827] border border-slate-600 rounded text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">API Secret</label>
+                        <input
+                          type="password"
+                          value={platform.apiSecret}
+                          onChange={(e) => setCollectionCfg({
+                            ...collectionCfg,
+                            platforms: {
+                              ...collectionCfg.platforms,
+                              [key]: { ...platform, apiSecret: e.target.value },
+                            },
+                          })}
+                          placeholder="输入API Secret"
+                          className="w-full px-3 py-2 bg-[#111827] border border-slate-600 rounded text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* RPA Config */}
+          <div className="bg-[#111827] border border-slate-800 rounded-xl p-6 space-y-5">
+            <div className="flex items-center gap-2">
+              <div>
+                <h3 className="text-lg font-medium text-white flex items-center gap-2">
+                  RPA爬虫配置
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium bg-orange-500/10 text-orange-400 rounded">
+                    <AlertTriangle className="w-3 h-3" />
+                    实验性功能
+                  </span>
+                </h3>
+                <p className="text-sm text-slate-400 mt-1">配置自动化爬虫脚本参数</p>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">脚本类型</label>
+                <select
+                  value={collectionCfg.rpa.scriptType}
+                  onChange={(e) => setCollectionCfg({
+                    ...collectionCfg,
+                    rpa: { ...collectionCfg.rpa, scriptType: e.target.value as 'selenium' | 'playwright' | 'requests' },
+                  })}
+                  className="w-full px-3 py-2 bg-[#0a0e1a] border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500"
+                >
+                  <option value="playwright">Playwright（推荐）</option>
+                  <option value="selenium">Selenium</option>
+                  <option value="requests">Requests（仅静态页面）</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1">平台账号</label>
+                  <input
+                    value={collectionCfg.rpa.username}
+                    onChange={(e) => setCollectionCfg({
+                      ...collectionCfg,
+                      rpa: { ...collectionCfg.rpa, username: e.target.value },
+                    })}
+                    placeholder="登录账号"
+                    className="w-full px-3 py-2 bg-[#0a0e1a] border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1">平台密码</label>
+                  <input
+                    type="password"
+                    value={collectionCfg.rpa.password}
+                    onChange={(e) => setCollectionCfg({
+                      ...collectionCfg,
+                      rpa: { ...collectionCfg.rpa, password: e.target.value },
+                    })}
+                    placeholder="登录密码"
+                    className="w-full px-3 py-2 bg-[#0a0e1a] border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">请求间隔（秒）</label>
+                <input
+                  type="number"
+                  value={collectionCfg.rpa.requestInterval}
+                  onChange={(e) => setCollectionCfg({
+                    ...collectionCfg,
+                    rpa: { ...collectionCfg.rpa, requestInterval: parseInt(e.target.value) || 3 },
+                  })}
+                  min={1}
+                  max={30}
+                  className="w-full px-3 py-2 bg-[#0a0e1a] border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500"
+                />
+                <p className="text-xs text-slate-500 mt-1">两次请求之间的等待时间，建议3-10秒</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <label className="flex items-center gap-2 p-3 bg-[#0a0e1a] border border-slate-700 rounded-lg cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={collectionCfg.rpa.randomDelay}
+                    onChange={(e) => setCollectionCfg({
+                      ...collectionCfg,
+                      rpa: { ...collectionCfg.rpa, randomDelay: e.target.checked },
+                    })}
+                    className="rounded border-slate-600"
+                  />
+                  <span className="text-sm text-slate-300">随机延迟</span>
+                </label>
+                <label className="flex items-center gap-2 p-3 bg-[#0a0e1a] border border-slate-700 rounded-lg cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={collectionCfg.rpa.proxyRotation}
+                    onChange={(e) => setCollectionCfg({
+                      ...collectionCfg,
+                      rpa: { ...collectionCfg.rpa, proxyRotation: e.target.checked },
+                    })}
+                    className="rounded border-slate-600"
+                  />
+                  <span className="text-sm text-slate-300">代理轮换</span>
+                </label>
+                <label className="flex items-center gap-2 p-3 bg-[#0a0e1a] border border-slate-700 rounded-lg cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={collectionCfg.rpa.uaRotation}
+                    onChange={(e) => setCollectionCfg({
+                      ...collectionCfg,
+                      rpa: { ...collectionCfg.rpa, uaRotation: e.target.checked },
+                    })}
+                    className="rounded border-slate-600"
+                  />
+                  <span className="text-sm text-slate-300">UA轮换</span>
+                </label>
+              </div>
             </div>
           </div>
         </div>
