@@ -85,7 +85,10 @@ export default function InterviewsPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button className="flex h-9 items-center gap-1.5 rounded-lg bg-sky-500 px-3 text-xs md:text-sm font-medium text-white hover:bg-sky-600 transition-colors">
+          <button
+            onClick={() => alert('新建面试安排功能开发中...')}
+            className="flex h-9 items-center gap-1.5 rounded-lg bg-sky-500 px-3 text-xs md:text-sm font-medium text-white hover:bg-sky-600 transition-colors"
+          >
             <Plus className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">新建面试安排</span>
             <span className="sm:hidden">新建</span>

@@ -44,12 +44,26 @@ export default function OffersPage() {
   const [selectedOffer, setSelectedOffer] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showSalaryRef, setShowSalaryRef] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
 
   const handleGenerateOffer = (offerId: string) => {
     setIsGenerating(true);
     setTimeout(() => {
       setIsGenerating(false);
     }, 2500);
+  };
+
+  const handleApprove = (offerId: string) => {
+    alert(`Offer ${offerId} 审批通过！`);
+  };
+
+  const handleReject = (offerId: string) => {
+    alert(`Offer ${offerId} 已驳回！`);
+  };
+
+  const handleSend = (offerId: string) => {
+    alert(`Offer ${offerId} 已发送给候选人！`);
   };
 
   const stats = [

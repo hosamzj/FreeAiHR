@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { mockCandidates, mockParsedResume } from '@/lib/mock-data';
+import { Modal } from '@/components/ui/modal';
 
 type TabType = 'all' | 'new' | 'screening' | 'interview' | 'offer' | 'hired';
 
@@ -40,6 +41,9 @@ export default function ResumesPage() {
   const [isParsing, setIsParsing] = useState(false);
   const [parsedResult, setParsedResult] = useState<typeof mockParsedResume | null>(null);
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [showAiScreenModal, setShowAiScreenModal] = useState(false);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -66,14 +70,20 @@ export default function ResumesPage() {
               className="h-9 w-full rounded-lg border border-[#1e293b] bg-[#111827] pl-9 pr-4 text-sm text-slate-300 placeholder:text-slate-600 focus:border-sky-500/50 focus:outline-none sm:w-56"
             />
           </div>
-          <button className="flex h-9 items-center gap-1.5 rounded-lg border border-[#1e293b] bg-[#111827] px-2.5 text-sm text-slate-400 hover:text-white transition-colors sm:px-3">
+          <button
+            onClick={() => setShowFilterModal(true)}
+            className="flex h-9 items-center gap-1.5 rounded-lg border border-[#1e293b] bg-[#111827] px-2.5 text-sm text-slate-400 hover:text-white transition-colors sm:px-3"
+          >
             <Filter className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">筛选</span>
             <ChevronDown className="h-3 w-3" />
           </button>
         </div>
         <div className="flex items-center gap-2">
-          <button className="flex h-9 items-center gap-1.5 rounded-lg border border-[#1e293b] bg-[#111827] px-2.5 text-sm text-slate-400 hover:text-white transition-colors sm:px-3">
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="flex h-9 items-center gap-1.5 rounded-lg border border-[#1e293b] bg-[#111827] px-2.5 text-sm text-slate-400 hover:text-white transition-colors sm:px-3"
+          >
             <FileText className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">批量导入</span>
             <span className="sm:hidden">导入</span>
@@ -210,10 +220,10 @@ export default function ResumesPage() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <button className="flex h-8 items-center gap-1.5 rounded-lg bg-sky-500 px-3 text-xs font-medium text-white hover:bg-sky-600 transition-colors">
+                <button onClick={() => alert('已加入候选人池')} className="flex h-8 items-center gap-1.5 rounded-lg bg-sky-500 px-3 text-xs font-medium text-white hover:bg-sky-600 transition-colors">
                   <Check className="h-3.5 w-3.5" /> 加入候选人池
                 </button>
-                <button className="flex h-8 items-center gap-1.5 rounded-lg border border-[#1e293b] px-3 text-xs text-slate-400 hover:text-white transition-colors">
+                <button onClick={() => alert('查看详情功能开发中')} className="flex h-8 items-center gap-1.5 rounded-lg border border-[#1e293b] px-3 text-xs text-slate-400 hover:text-white transition-colors">
                   <Eye className="h-3.5 w-3.5" /> 查看详情
                 </button>
               </div>
@@ -340,14 +350,23 @@ export default function ResumesPage() {
                     ))}
                   </div>
                 </div>
-                <div className="flex gap-2 pt-1">
-                  <button className="flex h-7 md:h-8 items-center gap-1 rounded-lg bg-sky-500 px-2.5 md:px-3 text-[11px] md:text-xs font-medium text-white hover:bg-sky-600 transition-colors">
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <button
+                    onClick={() => alert(`已通过 ${candidate.name} 的筛选`)}
+                    className="flex h-7 md:h-8 items-center gap-1 rounded-lg bg-sky-500 px-2.5 md:px-3 text-[11px] md:text-xs font-medium text-white hover:bg-sky-600 transition-colors"
+                  >
                     <Check className="h-3 w-3" /> 通过筛选
                   </button>
-                  <button className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-[#1e293b] px-2.5 md:px-3 text-[11px] md:text-xs text-slate-400 hover:text-white transition-colors">
+                  <button
+                    onClick={() => alert(`为 ${candidate.name} 安排面试`)}
+                    className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-[#1e293b] px-2.5 md:px-3 text-[11px] md:text-xs text-slate-400 hover:text-white transition-colors"
+                  >
                     <Calendar className="h-3 w-3" /> 安排面试
                   </button>
-                  <button className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-red-500/20 px-2.5 md:px-3 text-[11px] md:text-xs text-red-400 hover:bg-red-500/10 transition-colors">
+                  <button
+                    onClick={() => alert(`已淘汰 ${candidate.name}`)}
+                    className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-red-500/20 px-2.5 md:px-3 text-[11px] md:text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+                  >
                     <X className="h-3 w-3" /> 淘汰
                   </button>
                 </div>
