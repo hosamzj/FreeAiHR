@@ -222,8 +222,14 @@ export default function InterviewsPage() {
       const candidatesRes = await fetch('/api/candidates?status=screening,interview');
       const candidatesData = await candidatesRes.json();
       if (candidatesData.code === 0) {
+        // API returns { data: { candidates: [...], total, ... } }
+        const candidatesList = Array.isArray(candidatesData.data?.candidates)
+          ? candidatesData.data.candidates
+          : Array.isArray(candidatesData.data)
+            ? candidatesData.data
+            : [];
         setCandidates(
-          (candidatesData.data || []).map((c: { id: string; name: string; appliedPosition?: string; position?: string }) => ({
+          candidatesList.map((c: { id: string; name: string; appliedPosition?: string; position?: string }) => ({
             id: c.id,
             name: c.name,
             appliedPosition: c.appliedPosition || c.position || '未指定',
@@ -235,8 +241,14 @@ export default function InterviewsPage() {
       const interviewersRes = await fetch('/api/users?role=interviewer');
       const interviewersData = await interviewersRes.json();
       if (interviewersData.code === 0) {
+        // API returns { data: { users: [...], total, ... } }
+        const usersList = Array.isArray(interviewersData.data?.users)
+          ? interviewersData.data.users
+          : Array.isArray(interviewersData.data)
+            ? interviewersData.data
+            : [];
         setInterviewers(
-          (interviewersData.data || []).map((u: { id: string; name: string; department?: string }) => ({
+          usersList.map((u: { id: string; name: string; department?: string }) => ({
             id: u.id,
             name: u.name,
             department: u.department || '未分配',
@@ -248,7 +260,8 @@ export default function InterviewsPage() {
       const methodsRes = await fetch('/api/system/interview-methods');
       const methodsData = await methodsRes.json();
       if (methodsData.code === 0) {
-        setInterviewMethods(methodsData.data || []);
+        // API returns { data: [...] }
+        setInterviewMethods(Array.isArray(methodsData.data) ? methodsData.data : []);
       }
     } catch (err) {
       console.error('获取选项失败:', err);
