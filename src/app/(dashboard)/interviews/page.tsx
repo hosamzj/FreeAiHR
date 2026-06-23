@@ -45,7 +45,7 @@ const calendarInterviews: Record<string, typeof mockInterviews> = {
   '1-3': [mockInterviews[1]],
   '2-2': [mockInterviews[2]],
   '3-4': [mockInterviews[3]],
-  '4-1': [mockInterviews[4]],
+  '4-1': mockInterviews[0] ? [mockInterviews[0]] : [], // 复用第一个面试数据
 };
 
 export default function InterviewsPage() {
