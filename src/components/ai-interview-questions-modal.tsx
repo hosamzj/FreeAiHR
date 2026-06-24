@@ -236,7 +236,7 @@ export function AIInterviewQuestionsModal({
                       <span className={cn('px-1.5 py-0.5 rounded text-[10px]', typeLabels[q.type]?.color)}>
                         {typeLabels[q.type]?.label}
                       </span>
-                      {q.expectedAnswer && (
+                      {q.expectedAnswer && q.expectedAnswer.length > 0 && (
                         <span className="text-[10px] text-slate-500">
                           参考答案: {q.expectedAnswer.slice(0, 50)}...
                         </span>

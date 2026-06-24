@@ -64,20 +64,20 @@ export function AIJDModal({ isOpen, onClose }: AIJDModalProps) {
   const handleCopy = () => {
     if (!result) return;
     const text = [
-      `## ${result.positionName}`,
+      `## ${result.positionName || ''}`,
       result.department ? `部门：${result.department}` : '',
       '',
       '### 岗位职责',
-      ...result.responsibilities.map((r, i) => `${i + 1}. ${r}`),
+      ...(result.responsibilities || []).map((r, i) => `${i + 1}. ${r}`),
       '',
       '### 任职要求',
-      ...result.requirements.map((r, i) => `${i + 1}. ${r}`),
+      ...(result.requirements || []).map((r, i) => `${i + 1}. ${r}`),
       '',
       '### 加分项',
-      ...result.preferred.map((r, i) => `${i + 1}. ${r}`),
+      ...(result.preferred || []).map((r, i) => `${i + 1}. ${r}`),
       '',
       '### 福利待遇',
-      ...result.benefits.map((r, i) => `${i + 1}. ${r}`),
+      ...(result.benefits || []).map((r, i) => `${i + 1}. ${r}`),
     ].filter(Boolean).join('\n');
     navigator.clipboard.writeText(text);
     setCopied(true);

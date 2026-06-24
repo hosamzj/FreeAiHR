@@ -22,15 +22,17 @@ interface AbilityScores {
 interface ProfileResult {
   abilities: AbilityScores;
   personality: {
-    type: string;
-    name: string;
+    primary: string;
+    secondary: string;
     description: string;
   };
-  summary: string;
+  evaluation: string;
   recommendationScore: number;
-  matchScore: number;
-  strengths: string[];
-  weaknesses: string[];
+  positionMatch: {
+    score: number;
+    strengths: string[];
+    gaps: string[];
+  };
 }
 
 export function AICandidateProfile({ candidateId, candidateName, position }: AICandidateProfileProps) {
@@ -40,6 +42,7 @@ export function AICandidateProfile({ candidateId, candidateName, position }: AIC
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const fetchProfile = async () => {
+    if (!candidateId) return;
     setLoading(true);
     setError(null);
     try {
@@ -80,13 +83,14 @@ export function AICandidateProfile({ candidateId, candidateName, position }: AIC
     const cy = size / 2;
     const maxR = 90;
     const labels = ['技术', '沟通', '领导', '创新', '执行', '学习'];
+    const abilities = profile.abilities || {};
     const values = [
-      profile.abilities.technical,
-      profile.abilities.communication,
-      profile.abilities.leadership,
-      profile.abilities.innovation,
-      profile.abilities.execution,
-      profile.abilities.learning,
+      abilities.technical || 0,
+      abilities.communication || 0,
+      abilities.leadership || 0,
+      abilities.innovation || 0,
+      abilities.execution || 0,
+      abilities.learning || 0,
     ];
     const n = labels.length;
 
@@ -175,6 +179,11 @@ export function AICandidateProfile({ candidateId, candidateName, position }: AIC
     }
   }, [profile]);
 
+  // Safety check for required props - must be after all hooks
+  if (!candidateId) {
+    return <p className="text-sm text-slate-500 text-center py-4">候选人信息缺失</p>;
+  }
+
   if (!profile && !loading) {
     return (
       <div className="flex flex-col items-center py-8">
@@ -227,13 +236,13 @@ export function AICandidateProfile({ candidateId, candidateName, position }: AIC
         <ScoreCard
           icon={<TrendingUp className="w-4 h-4" />}
           label="岗位匹配"
-          value={profile.matchScore}
+          value={profile.positionMatch?.score || 0}
           color="emerald"
         />
         <ScoreCard
           icon={<Star className="w-4 h-4" />}
           label="综合评分"
-          value={Math.round((profile.recommendationScore + profile.matchScore) / 2)}
+          value={Math.round((profile.recommendationScore + (profile.positionMatch?.score || 0)) / 2)}
           color="orange"
         />
       </div>
@@ -254,9 +263,9 @@ export function AICandidateProfile({ candidateId, candidateName, position }: AIC
             <Brain className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-sm font-medium text-white">{profile.personality.name}</p>
-            <p className="text-xs text-slate-400 mt-0.5">{profile.personality.type}</p>
-            <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">{profile.personality.description}</p>
+            <p className="text-sm font-medium text-white">{profile.personality?.primary || '未知'}</p>
+            <p className="text-xs text-slate-400 mt-0.5">副型：{profile.personality?.secondary || '未知'}</p>
+            <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">{profile.personality?.description || ''}</p>
           </div>
         </div>
       </div>
@@ -264,7 +273,7 @@ export function AICandidateProfile({ candidateId, candidateName, position }: AIC
       {/* Summary */}
       <div className="bg-[#0a0e1a] border border-slate-800 rounded-xl p-4">
         <h4 className="text-xs font-medium text-slate-400 mb-2">综合评价</h4>
-        <p className="text-xs text-slate-300 leading-relaxed">{profile.summary}</p>
+        <p className="text-xs text-slate-300 leading-relaxed">{profile.evaluation || ''}</p>
       </div>
 
       {/* Strengths & Weaknesses */}
@@ -272,7 +281,7 @@ export function AICandidateProfile({ candidateId, candidateName, position }: AIC
         <div className="bg-[#0a0e1a] border border-slate-800 rounded-xl p-4">
           <h4 className="text-xs font-medium text-emerald-400 mb-2">优势</h4>
           <ul className="space-y-1.5">
-            {profile.strengths.map((s, i) => (
+            {(profile.positionMatch?.strengths || []).map((s, i) => (
               <li key={i} className="text-xs text-slate-300 flex gap-1.5">
                 <span className="text-emerald-400 shrink-0">+</span>
                 {s}
@@ -283,7 +292,7 @@ export function AICandidateProfile({ candidateId, candidateName, position }: AIC
         <div className="bg-[#0a0e1a] border border-slate-800 rounded-xl p-4">
           <h4 className="text-xs font-medium text-amber-400 mb-2">待提升</h4>
           <ul className="space-y-1.5">
-            {profile.weaknesses.map((w, i) => (
+            {(profile.positionMatch?.gaps || []).map((w, i) => (
               <li key={i} className="text-xs text-slate-300 flex gap-1.5">
                 <span className="text-amber-400 shrink-0">-</span>
                 {w}
