@@ -69,12 +69,13 @@ export default function ContractsPage() {
   const [showTimelineModal, setShowTimelineModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
-  const [newContract, setNewContract] = useState({ employeeId: '', employeeName: '', department: '', position: '', startDate: '', endDate: '' });
+  const [newContract, setNewContract] = useState({ employeeId: '', candidateId: '', employeeName: '', department: '', position: '', startDate: '', endDate: '' });
   const [reminderRules, setReminderRules] = useState<ReminderRule[]>([]);
   const [weeklySummary, setWeeklySummary] = useState<WeeklySummary | null>(null);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [emailPreview, setEmailPreview] = useState<EmailPreview | null>(null);
   const [expandedContract, setExpandedContract] = useState<string | null>(null);
+  const [eligibleEmployees, setEligibleEmployees] = useState<Array<{ id: string; name: string; department: string | null; appliedPosition: string | null; hireDate: Date | null }>>([]);
 
   const loadContracts = useCallback(async () => {
     try {
@@ -136,6 +137,16 @@ export default function ContractsPage() {
     }
   }, []);
 
+  const loadEligibleEmployees = useCallback(async () => {
+    try {
+      const res = await fetch('/api/contracts/eligible-employees');
+      const data = await res.json();
+      setEligibleEmployees(data.data || []);
+    } catch (e) {
+      console.error('Load eligible employees error:', e);
+    }
+  }, []);
+
   useEffect(() => {
     Promise.all([loadContracts(), loadExpiring()]).finally(() => setLoading(false));
   }, [loadContracts, loadExpiring]);
@@ -144,6 +155,21 @@ export default function ContractsPage() {
     if (activeTab === 'rules') loadReminderRules();
     if (activeTab === 'summary') loadWeeklySummary();
   }, [activeTab, loadReminderRules, loadWeeklySummary]);
+
+  useEffect(() => {
+    if (showAddModal) loadEligibleEmployees();
+  }, [showAddModal, loadEligibleEmployees]);
+
+  const handleSelectEmployee = (emp: typeof eligibleEmployees[0]) => {
+    setNewContract({
+      ...newContract,
+      candidateId: emp.id,
+      employeeName: emp.name,
+      department: emp.department || '',
+      position: emp.appliedPosition || '',
+      startDate: emp.hireDate ? new Date(emp.hireDate).toISOString().split('T')[0] : '',
+    });
+  };
 
   const handleAddContract = async () => {
     try {
@@ -154,7 +180,7 @@ export default function ContractsPage() {
       });
       if (res.ok) {
         setShowAddModal(false);
-        setNewContract({ employeeId: '', employeeName: '', department: '', position: '', startDate: '', endDate: '' });
+        setNewContract({ employeeId: '', candidateId: '', employeeName: '', department: '', position: '', startDate: '', endDate: '' });
         loadContracts();
         loadExpiring();
       }
@@ -511,6 +537,26 @@ export default function ContractsPage() {
       {/* Add Contract Modal */}
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="新建合同">
         <div className="space-y-4">
+          <div>
+            <label className="text-sm text-slate-400">选择已入职员工（可选）</label>
+            <select
+              value={newContract.candidateId}
+              onChange={e => {
+                const emp = eligibleEmployees.find(emp => emp.id === e.target.value);
+                if (emp) handleSelectEmployee(emp);
+                else setNewContract({ ...newContract, candidateId: '' });
+              }}
+              className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
+            >
+              <option value="">-- 手动填写或选择员工 --</option>
+              {eligibleEmployees.map(emp => (
+                <option key={emp.id} value={emp.id}>{emp.name} - {emp.department || '未分配'} - {emp.appliedPosition || '未设置'}</option>
+              ))}
+            </select>
+            {eligibleEmployees.length === 0 && (
+              <p className="mt-1 text-xs text-slate-500">暂无可选择的已入职员工，请手动填写</p>
+            )}
+          </div>
           <div>
             <label className="text-sm text-slate-400">员工姓名</label>
             <input

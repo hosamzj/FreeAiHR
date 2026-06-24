@@ -66,6 +66,27 @@ export default function OnboardingPage() {
   const [showEmailPreview, setShowEmailPreview] = useState(false);
   const [emailContent, setEmailContent] = useState('');
   const [timeline, setTimeline] = useState<{ time: string; action: string; user: string }[]>([]);
+  const [eligibleEmployees, setEligibleEmployees] = useState<{ id: string; name: string; department: string | null; position: string | null; startDate: Date | null; email: string | null; phone: string | null }[]>([]);
+
+  const loadEligibleEmployees = useCallback(async () => {
+    try {
+      const res = await fetch('/api/onboarding/eligible-employees');
+      const data = await res.json();
+      setEligibleEmployees(data.data || []);
+    } catch (e) {
+      console.error('Load eligible employees error:', e);
+    }
+  }, []);
+
+  const handleSelectEmployee = (emp: { id: string; name: string; department: string | null; position: string | null; startDate: Date | null }) => {
+    setNewOnboarding({
+      candidateId: emp.id,
+      employeeName: emp.name,
+      department: emp.department || '',
+      position: emp.position || '',
+      startDate: emp.startDate ? new Date(emp.startDate).toISOString().split('T')[0] : '',
+    });
+  };
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -396,6 +417,25 @@ export default function OnboardingPage() {
       {/* Initiate Modal */}
       <Modal isOpen={showInitModal} onClose={() => setShowInitModal(false)} title="发起入职">
         <div className="space-y-4">
+          <div>
+            <label className="text-sm text-slate-400">选择员工（已签合同人员）</label>
+            <select
+              value={newOnboarding.candidateId}
+              onChange={e => {
+                const emp = eligibleEmployees.find(el => el.id === e.target.value);
+                if (emp) handleSelectEmployee(emp);
+              }}
+              className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
+            >
+              <option value="">-- 请选择员工 --</option>
+              {eligibleEmployees.map(emp => (
+                <option key={emp.id} value={emp.id}>{emp.name} - {emp.department || '未分配'} / {emp.position || '未设置'}</option>
+              ))}
+            </select>
+            {eligibleEmployees.length === 0 && (
+              <p className="mt-1 text-xs text-slate-500">暂无可入职人员，请先完成合同签署</p>
+            )}
+          </div>
           <div>
             <label className="text-sm text-slate-400">员工姓名</label>
             <input
