@@ -247,3 +247,168 @@ model Notification {
   link        String?
   createdAt   DateTime @default(now())
 }
+
+// ============ 新增模型：员工生命周期管理 ============
+
+model PositionTemplate {
+  id              String   @id @default(cuid())
+  category        String   // tech, product, design, operations, sales, management
+  title           String
+  description     String?  // 岗位职责模板
+  requirements    String?  // 任职要求模板 (JSON)
+  skillsWeight    String   @default("{}") // 技能权重 (JSON)
+  experienceWeight String  @default("{}") // 经验权重 (JSON)
+  cultureWeight   String   @default("{}") // 文化匹配权重 (JSON)
+  industry        String?  // 行业
+  version         Int      @default(1)
+  usageCount      Int      @default(0)
+  status          String   @default("active") // active, archived
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model InterviewFeedback {
+  id                String   @id @default(cuid())
+  interviewId       String
+  evaluatorId       String
+  round             Int      @default(1) // 面试轮次
+  // 评分维度 1-5
+  technicalScore    Int?     // 专业技能
+  communicationScore Int?    // 沟通表达
+  problemSolvingScore Int?   // 问题解决
+  teamworkScore     Int?     // 团队协作
+  cultureScore      Int?     // 文化匹配
+  overallScore      Int?     // 综合评分
+  // 评价内容
+  strengths         String?  // 优势
+  weaknesses        String?  // 不足
+  concerns          String?  // 顾虑
+  recommendation    String?  // strongly_recommend, recommend, neutral, not_recommend
+  comments          String?  // 详细评语
+  aiSummary         String?  // AI辅助总结
+  submittedAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([interviewId, evaluatorId, round])
+}
+
+model CandidatePool {
+  id              String   @id @default(cuid())
+  candidateId     String   @unique
+  status          String   @default("active") // active, reserve, blacklist, hired
+  poolTags        String   @default("[]") // JSON array
+  notes           String?  // HR备注
+  lastContactAt   DateTime?
+  lastContactType String?  // phone, email, meeting
+  contactHistory  String   @default("[]") // JSON array of contacts
+  skillTags       String   @default("[]") // 技能标签
+  expectedSalary  String?  // 期望薪资
+  location        String?  // 所在地区
+  yearsExp        Int?     // 工作年限
+  education       String?  // 学历
+  recommendedFor  String   @default("[]") // JSON array of positionIds
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model ScreeningQuestion {
+  id              String   @id @default(cuid())
+  candidateId     String
+  positionId      String?
+  question        String
+  questionType    String   // experience_verify, skill_depth, motivation, salary_expect, start_date
+  order           Int      @default(0)
+  answer          String?
+  answerScore     Int?     // 1-5
+  aiEvaluation    String?  // AI评分意见
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model InterviewPackage {
+  id              String   @id @default(cuid())
+  interviewId     String   @unique
+  candidateSummary String? // 候选人简历摘要
+  aiProfile       String? // AI画像关键点 (JSON)
+  suggestedQuestions String? // 建议面试题目 (JSON array)
+  riskPoints      String? // 关注风险点 (JSON array)
+  scoringRubric   String? // 评分表 (JSON)
+  interviewerNotes String? // 面试官实时笔记
+  feedback        String? // 结构化反馈 (JSON)
+  status          String   @default("pending") // pending, in_progress, completed
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Contract {
+  id              String   @id @default(cuid())
+  employeeId      String   // 关联User表
+  employeeName    String
+  department      String?
+  position        String?
+  contractType    String   @default("regular") // regular, fixed_term, intern
+  startDate       DateTime
+  endDate         DateTime
+  status          String   @default("active") // active, expiring, renewing, renewed, terminated
+  // 续签流程
+  renewInitiatedBy String? // 发起续签的经理ID
+  renewInitiatedAt DateTime?
+  renewApprovedBy  String? // HRBP审批人ID
+  renewApprovedAt  DateTime?
+  renewExecutedBy  String? // HRS执行人ID
+  renewExecutedAt  DateTime?
+  renewNotes      String?
+  // 提醒
+  reminderSent90  Boolean  @default(false)
+  reminderSent60  Boolean  @default(false)
+  reminderSent30  Boolean  @default(false)
+  reminderSent7   Boolean  @default(false)
+  // 历史
+  previousContractId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Onboarding {
+  id              String   @id @default(cuid())
+  candidateId     String   @unique
+  employeeName    String
+  position        String?
+  department      String?
+  managerId       String?  // 用人经理
+  mentorId        String?  // 导师
+  startDate       DateTime
+  status          String   @default("pending") // pending, in_progress, completed, cancelled
+  // 入职任务
+  tasks           String   @default("[]") // JSON array of tasks
+  // 进度追踪
+  itReady         Boolean  @default(false)
+  adminReady      Boolean  @default(false)
+  trainingReady   Boolean  @default(false)
+  teamReady       Boolean  @default(false)
+  // 回访
+  day7FollowUp    Boolean  @default(false)
+  day7FollowUpAt  DateTime?
+  day30FollowUp   Boolean  @default(false)
+  day30FollowUpAt DateTime?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model OnboardingTask {
+  id              String   @id @default(cuid())
+  onboardingId    String
+  category        String   // it, admin, training, team
+  title           String
+  description     String?
+  assigneeId      String?  // 负责人ID
+  assigneeName    String?
+  status          String   @default("pending") // pending, in_progress, completed
+  completedAt     DateTime?
+  dueDate         DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}

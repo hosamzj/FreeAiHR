@@ -15,6 +15,10 @@ import {
   Users,
   Settings,
   Download,
+  FileSignature,
+  UserPlus,
+  ClipboardList,
+  Target,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -24,17 +28,27 @@ interface NavItem {
   icon: typeof LayoutDashboard;
   href: string;
   roles: string[];
+  group?: string;
 }
 
 const allNavItems: NavItem[] = [
-  { id: 'dashboard', label: '招聘看板', icon: LayoutDashboard, href: '/dashboard', roles: ['admin', 'hr_manager'] },
-  { id: 'resumes', label: '简历管理', icon: FileText, href: '/resumes', roles: ['admin', 'hr_manager'] },
-  { id: 'collection', label: '简历采集', icon: Download, href: '/collection', roles: ['admin', 'hr_manager'] },
-  { id: 'interviews', label: '面试排期', icon: Calendar, href: '/interviews', roles: ['admin', 'hr_manager', 'interviewer'] },
-  { id: 'analysis', label: '面试分析', icon: Brain, href: '/analysis', roles: ['admin', 'hr_manager'] },
-  { id: 'offers', label: 'Offer管理', icon: FileCheck, href: '/offers', roles: ['admin', 'hr_manager'] },
-  { id: 'users', label: '用户管理', icon: Users, href: '/users', roles: ['admin'] },
-  { id: 'settings', label: '系统设置', icon: Settings, href: '/settings', roles: ['admin'] },
+  // 招聘前端
+  { id: 'dashboard', label: '招聘看板', icon: LayoutDashboard, href: '/dashboard', roles: ['admin', 'hr_manager'], group: '招聘管理' },
+  { id: 'resumes', label: '简历管理', icon: FileText, href: '/resumes', roles: ['admin', 'hr_manager'], group: '招聘管理' },
+  { id: 'collection', label: '简历采集', icon: Download, href: '/collection', roles: ['admin', 'hr_manager'], group: '招聘管理' },
+  { id: 'interviews', label: '面试排期', icon: Calendar, href: '/interviews', roles: ['admin', 'hr_manager', 'interviewer'], group: '招聘管理' },
+  { id: 'analysis', label: '面试分析', icon: Brain, href: '/analysis', roles: ['admin', 'hr_manager'], group: '招聘管理' },
+  { id: 'offers', label: 'Offer管理', icon: FileCheck, href: '/offers', roles: ['admin', 'hr_manager'], group: '招聘管理' },
+  // 招聘增强
+  { id: 'templates', label: '岗位模板库', icon: ClipboardList, href: '/templates', roles: ['admin', 'hr_manager'], group: '招聘增强' },
+  { id: 'candidate-pool', label: '候选人池', icon: Target, href: '/candidate-pool', roles: ['admin', 'hr_manager'], group: '招聘增强' },
+  { id: 'reports', label: '招聘报表', icon: FileText, href: '/reports', roles: ['admin', 'hr_manager'], group: '招聘增强' },
+  // 员工生命周期
+  { id: 'contracts', label: '合同管理', icon: FileSignature, href: '/contracts', roles: ['admin', 'hr_manager'], group: '员工生命周期' },
+  { id: 'onboarding', label: '入职管理', icon: UserPlus, href: '/onboarding', roles: ['admin', 'hr_manager'], group: '员工生命周期' },
+  // 系统
+  { id: 'users', label: '用户管理', icon: Users, href: '/users', roles: ['admin'], group: '系统' },
+  { id: 'settings', label: '系统设置', icon: Settings, href: '/settings', roles: ['admin'], group: '系统' },
 ];
 
 export function Sidebar() {
@@ -90,26 +104,40 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 space-y-0.5 p-2.5 md:space-y-1 md:p-3 overflow-y-auto scrollbar-hide">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const active = isActive(item.href);
-          return (
-            <button
-              key={item.id}
-              onClick={() => handleNav(item.href)}
-              className={cn(
-                'group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-200',
-                active
-                  ? 'bg-sky-500/10 text-sky-400 shadow-sm shadow-sky-500/5'
-                  : 'text-slate-400 hover:bg-[#1a2236] hover:text-slate-200'
-              )}
-            >
-              <Icon className={cn('h-4 w-4', active ? 'text-sky-400' : 'text-slate-500 group-hover:text-slate-300')} />
-              <span className="flex-1 text-left">{item.label}</span>
-              {active && <ChevronRight className="h-3.5 w-3.5 text-sky-400/60" />}
-            </button>
-          );
-        })}
+        {(() => {
+          const groups = navItems.reduce((acc, item) => {
+            const group = item.group || '其他';
+            if (!acc[group]) acc[group] = [];
+            acc[group].push(item);
+            return acc;
+          }, {} as Record<string, NavItem[]>);
+
+          return Object.entries(groups).map(([groupName, items]) => (
+            <div key={groupName} className="mb-3">
+              <p className="px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-slate-500">{groupName}</p>
+              {items.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.href);
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleNav(item.href)}
+                    className={cn(
+                      'group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-200',
+                      active
+                        ? 'bg-sky-500/10 text-sky-400 shadow-sm shadow-sky-500/5'
+                        : 'text-slate-400 hover:bg-[#1a2236] hover:text-slate-200'
+                    )}
+                  >
+                    <Icon className={cn('h-4 w-4', active ? 'text-sky-400' : 'text-slate-500 group-hover:text-slate-300')} />
+                    <span className="flex-1 text-left">{item.label}</span>
+                    {active && <ChevronRight className="h-3.5 w-3.5 text-sky-400/60" />}
+                  </button>
+                );
+              })}
+            </div>
+          ));
+        })()}
       </nav>
 
       {/* User info & logout */}
