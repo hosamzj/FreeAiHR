@@ -412,3 +412,97 @@ model OnboardingTask {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
+
+// 合同续签提醒记录
+model ContractReminder {
+  id              String   @id @default(cuid())
+  contractId      String
+  reminderType    String   // T-45, T-30, T-15, T-7, overdue
+  recipientType   String   // manager, hrbp, hrs, hr_manager
+  recipientId     String?
+  recipientName   String?
+  recipientEmail  String?
+  status          String   @default("pending") // pending, sent, acknowledged, ignored
+  scheduledAt     DateTime // 计划发送时间
+  sentAt          DateTime?
+  acknowledgedAt  DateTime?
+  content         String?  // 提醒内容（JSON）
+  aiGenerated     Boolean  @default(false) // 是否AI生成
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// 合同续签提醒日志/归档
+model ContractReminderLog {
+  id              String   @id @default(cuid())
+  contractId      String
+  reminderId      String?
+  action          String   // reminder_sent, manager_confirmed, employee_signed, hr_signed, completed, overdue
+  actorId         String?
+  actorName       String?
+  actorRole       String?  // manager, hrbp, hrs, employee, system
+  details         String?  // JSON格式的详细信息
+  previousStatus  String?
+  newStatus       String?
+  createdAt       DateTime @default(now())
+}
+
+// 合同续签提醒规则配置
+model ContractReminderRule {
+  id              String   @id @default(cuid())
+  name            String   // T-45, T-30, T-15, T-7
+  daysBefore      Int      // 提前天数
+  recipientTypes  String   // JSON array: ["manager", "hrbp", "hrs"]
+  enabled         Boolean  @default(true)
+  templateSubject String?  // 邮件主题模板
+  templateBody    String?  // 邮件正文模板
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// 入职通知记录
+model OnboardingNotification {
+  id              String   @id @default(cuid())
+  onboardingId    String
+  notificationType String  // completion_notice, training_reminder, anomaly_alert, daily_summary
+  recipientType   String   // manager, mentor, trainer, it, admin, hrbp, hrs
+  recipientId     String?
+  recipientName   String?
+  recipientEmail  String?
+  status          String   @default("pending") // pending, sent, acknowledged
+  scheduledAt     DateTime?
+  sentAt          DateTime?
+  acknowledgedAt  DateTime?
+  content         String?  // 通知内容（JSON）
+  aiGenerated     Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// 入职每日汇总
+model OnboardingDailySummary {
+  id              String   @id @default(cuid())
+  summaryDate     DateTime // 汇总日期
+  completedCount  Int      @default(0) // 当日完成入职数
+  pendingCount    Int      @default(0) // 待处理数
+  anomalyCount    Int      @default(0) // 异常数
+  completedList   String   @default("[]") // JSON: 完成入职的员工列表
+  anomalyList     String   @default("[]") // JSON: 异常记录列表
+  pendingList     String   @default("[]") // JSON: 待处理列表
+  notifiedAt      DateTime? // 通知发送时间
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// 入职通知规则配置
+model OnboardingNotificationRule {
+  id              String   @id @default(cuid())
+  name            String   // completion_notice, training_reminder, anomaly_alert
+  triggerCondition String  // 触发条件描述
+  recipientTypes  String   // JSON array: ["manager", "trainer", "hrbp"]
+  enabled         Boolean  @default(true)
+  templateSubject String?
+  templateBody    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}

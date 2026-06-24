@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { FileSignature, AlertTriangle, CheckCircle, Clock, Plus, RefreshCw } from 'lucide-react';
+import { FileSignature, AlertTriangle, CheckCircle, Clock, Plus, RefreshCw, Bell, Calendar, Mail, ChevronDown, ChevronUp } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
 
 interface Contract {
@@ -21,14 +21,58 @@ interface Contract {
   daysLeft?: number;
 }
 
+interface ReminderRule {
+  id: string;
+  name: string;
+  daysBefore: number;
+  recipientTypes: string[];
+  enabled: boolean;
+  templateSubject: string;
+  templateBody: string;
+}
+
+interface WeeklySummary {
+  period: { start: string; end: string };
+  pending: { total: number; items: Array<{ employeeName: string; reminderType: string; recipientName: string }> };
+  overdue: { total: number; items: Array<{ employeeName: string; daysOverdue: number }> };
+  completed: { total: number; items: Array<{ employeeName: string; completedAt: string }> };
+  upcoming: { total: number; items: Array<{ employeeName: string; daysLeft: number }> };
+}
+
+interface TimelineEvent {
+  id: string;
+  type: string;
+  title: string;
+  description: string;
+  timestamp: string;
+  actor: string;
+  status?: string;
+}
+
+interface EmailPreview {
+  to: string;
+  cc: string;
+  subject: string;
+  body: string;
+  reminderType: string;
+}
+
 export default function ContractsPage() {
+  const [activeTab, setActiveTab] = useState<'list' | 'rules' | 'summary'>('list');
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [expiringContracts, setExpiringContracts] = useState<{ urgent: Contract[]; warning: Contract[]; normal: Contract[] }>({ urgent: [], warning: [], normal: [] });
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showRenewModal, setShowRenewModal] = useState(false);
+  const [showTimelineModal, setShowTimelineModal] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
   const [newContract, setNewContract] = useState({ employeeId: '', employeeName: '', department: '', position: '', startDate: '', endDate: '' });
+  const [reminderRules, setReminderRules] = useState<ReminderRule[]>([]);
+  const [weeklySummary, setWeeklySummary] = useState<WeeklySummary | null>(null);
+  const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
+  const [emailPreview, setEmailPreview] = useState<EmailPreview | null>(null);
+  const [expandedContract, setExpandedContract] = useState<string | null>(null);
 
   const loadContracts = useCallback(async () => {
     try {
@@ -50,9 +94,54 @@ export default function ContractsPage() {
     }
   }, []);
 
+  const loadReminderRules = useCallback(async () => {
+    try {
+      const res = await fetch('/api/contracts/reminder-rules');
+      const data = await res.json();
+      setReminderRules(data.data || []);
+    } catch (e) {
+      console.error('Load reminder rules error:', e);
+    }
+  }, []);
+
+  const loadWeeklySummary = useCallback(async () => {
+    try {
+      const res = await fetch('/api/contracts/weekly-summary');
+      const data = await res.json();
+      setWeeklySummary(data.data || null);
+    } catch (e) {
+      console.error('Load weekly summary error:', e);
+    }
+  }, []);
+
+  const loadTimeline = useCallback(async (contractId: string) => {
+    try {
+      const res = await fetch(`/api/contracts/${contractId}/timeline`);
+      const data = await res.json();
+      setTimeline(data.data?.timeline || []);
+    } catch (e) {
+      console.error('Load timeline error:', e);
+    }
+  }, []);
+
+  const loadEmailPreview = useCallback(async (contractId: string, reminderType: string = 'T-45') => {
+    try {
+      const res = await fetch(`/api/contracts/${contractId}/preview-email?reminderType=${reminderType}`);
+      const data = await res.json();
+      setEmailPreview(data.data || null);
+    } catch (e) {
+      console.error('Load email preview error:', e);
+    }
+  }, []);
+
   useEffect(() => {
     Promise.all([loadContracts(), loadExpiring()]).finally(() => setLoading(false));
   }, [loadContracts, loadExpiring]);
+
+  useEffect(() => {
+    if (activeTab === 'rules') loadReminderRules();
+    if (activeTab === 'summary') loadWeeklySummary();
+  }, [activeTab, loadReminderRules, loadWeeklySummary]);
 
   const handleAddContract = async () => {
     try {
@@ -87,6 +176,31 @@ export default function ContractsPage() {
     } catch (e) {
       console.error('Renew error:', e);
     }
+  };
+
+  const handleToggleRule = async (ruleId: string, enabled: boolean) => {
+    try {
+      await fetch('/api/contracts/reminder-rules', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: ruleId, enabled }),
+      });
+      loadReminderRules();
+    } catch (e) {
+      console.error('Toggle rule error:', e);
+    }
+  };
+
+  const openTimeline = (contract: Contract) => {
+    setSelectedContract(contract);
+    loadTimeline(contract.id);
+    setShowTimelineModal(true);
+  };
+
+  const openEmailPreview = (contract: Contract, reminderType: string = 'T-45') => {
+    setSelectedContract(contract);
+    loadEmailPreview(contract.id, reminderType);
+    setShowEmailModal(true);
   };
 
   const getStatusColor = (status: string) => {
@@ -136,87 +250,254 @@ export default function ContractsPage() {
         </button>
       </div>
 
-      {/* Expiring Summary */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="h-8 w-8 text-red-400" />
-            <div>
-              <p className="text-2xl font-bold text-red-400">{expiringContracts.urgent.length}</p>
-              <p className="text-xs text-slate-400">30天内到期</p>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4">
-          <div className="flex items-center gap-3">
-            <Clock className="h-8 w-8 text-yellow-400" />
-            <div>
-              <p className="text-2xl font-bold text-yellow-400">{expiringContracts.warning.length}</p>
-              <p className="text-xs text-slate-400">31-60天到期</p>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-4">
-          <div className="flex items-center gap-3">
-            <CheckCircle className="h-8 w-8 text-green-400" />
-            <div>
-              <p className="text-2xl font-bold text-green-400">{contracts.filter(c => c.status === 'active').length}</p>
-              <p className="text-xs text-slate-400">正常合同</p>
-            </div>
-          </div>
-        </div>
+      {/* Tabs */}
+      <div className="flex gap-1 rounded-lg border border-[#1e293b] bg-[#111827] p-1">
+        <button
+          onClick={() => setActiveTab('list')}
+          className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'list' ? 'bg-sky-500/10 text-sky-400' : 'text-slate-400 hover:text-white'}`}
+        >
+          <FileSignature className="mr-2 inline h-4 w-4" />
+          合同列表
+        </button>
+        <button
+          onClick={() => setActiveTab('rules')}
+          className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'rules' ? 'bg-sky-500/10 text-sky-400' : 'text-slate-400 hover:text-white'}`}
+        >
+          <Bell className="mr-2 inline h-4 w-4" />
+          提醒规则
+        </button>
+        <button
+          onClick={() => setActiveTab('summary')}
+          className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'summary' ? 'bg-sky-500/10 text-sky-400' : 'text-slate-400 hover:text-white'}`}
+        >
+          <Calendar className="mr-2 inline h-4 w-4" />
+          周报摘要
+        </button>
       </div>
 
-      {/* Contracts List */}
-      <div className="rounded-xl border border-[#1e293b] bg-[#111827]">
-        <div className="border-b border-[#1e293b] p-4">
-          <h2 className="text-lg font-semibold text-white">合同列表</h2>
-        </div>
-        <div className="divide-y divide-[#1e293b]">
-          {contracts.length === 0 ? (
-            <div className="p-8 text-center text-slate-500">暂无合同记录</div>
-          ) : (
-            contracts.map(contract => (
-              <div key={contract.id} className="flex items-center justify-between p-4 hover:bg-[#1a2236]">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-500/10">
-                    <FileSignature className="h-5 w-5 text-sky-400" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-white">{contract.employeeName}</p>
-                    <p className="text-xs text-slate-400">
-                      {contract.department} · {contract.position} · {contract.contractType === 'regular' ? '正式' : contract.contractType === 'fixed_term' ? '固定期限' : '实习'}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <p className="text-sm text-slate-300">
-                      {new Date(contract.startDate).toLocaleDateString()} - {new Date(contract.endDate).toLocaleDateString()}
-                    </p>
-                    {contract.daysLeft !== undefined && contract.daysLeft <= 90 && (
-                      <p className={`text-xs ${contract.daysLeft <= 30 ? 'text-red-400' : contract.daysLeft <= 60 ? 'text-yellow-400' : 'text-slate-400'}`}>
-                        剩余 {contract.daysLeft} 天
-                      </p>
-                    )}
-                  </div>
-                  <span className={`rounded-full px-2 py-1 text-xs ${getStatusColor(contract.status)}`}>
-                    {getStatusLabel(contract.status)}
-                  </span>
-                  {(contract.status === 'active' || contract.status === 'expiring') && (
-                    <button
-                      onClick={() => { setSelectedContract(contract); setShowRenewModal(true); }}
-                      className="rounded-lg bg-sky-500/10 px-3 py-1.5 text-xs text-sky-400 hover:bg-sky-500/20"
-                    >
-                      续签
-                    </button>
-                  )}
+      {/* Tab Content */}
+      {activeTab === 'list' && (
+        <>
+          {/* Expiring Summary */}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="h-8 w-8 text-red-400" />
+                <div>
+                  <p className="text-2xl font-bold text-red-400">{expiringContracts.urgent.length}</p>
+                  <p className="text-xs text-slate-400">30天内到期</p>
                 </div>
               </div>
-            ))
-          )}
+            </div>
+            <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4">
+              <div className="flex items-center gap-3">
+                <Clock className="h-8 w-8 text-yellow-400" />
+                <div>
+                  <p className="text-2xl font-bold text-yellow-400">{expiringContracts.warning.length}</p>
+                  <p className="text-xs text-slate-400">31-60天到期</p>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-4">
+              <div className="flex items-center gap-3">
+                <CheckCircle className="h-8 w-8 text-green-400" />
+                <div>
+                  <p className="text-2xl font-bold text-green-400">{contracts.filter(c => c.status === 'active').length}</p>
+                  <p className="text-xs text-slate-400">正常合同</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Contracts List */}
+          <div className="rounded-xl border border-[#1e293b] bg-[#111827]">
+            <div className="border-b border-[#1e293b] p-4">
+              <h2 className="text-lg font-semibold text-white">合同列表</h2>
+            </div>
+            <div className="divide-y divide-[#1e293b]">
+              {contracts.length === 0 ? (
+                <div className="p-8 text-center text-slate-500">暂无合同记录</div>
+              ) : (
+                contracts.map(contract => (
+                  <div key={contract.id}>
+                    <div className="flex items-center justify-between p-4 hover:bg-[#1a2236]">
+                      <div className="flex items-center gap-4">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-500/10">
+                          <FileSignature className="h-5 w-5 text-sky-400" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-white">{contract.employeeName}</p>
+                          <p className="text-xs text-slate-400">
+                            {contract.department} · {contract.position} · {contract.contractType === 'regular' ? '正式' : contract.contractType === 'fixed_term' ? '固定期限' : '实习'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className="text-sm text-slate-300">
+                            {new Date(contract.startDate).toLocaleDateString()} - {new Date(contract.endDate).toLocaleDateString()}
+                          </p>
+                          {contract.daysLeft !== undefined && contract.daysLeft <= 90 && (
+                            <p className={`text-xs ${contract.daysLeft <= 30 ? 'text-red-400' : contract.daysLeft <= 60 ? 'text-yellow-400' : 'text-slate-400'}`}>
+                              剩余 {contract.daysLeft} 天
+                            </p>
+                          )}
+                        </div>
+                        <span className={`rounded-full px-2 py-1 text-xs ${getStatusColor(contract.status)}`}>
+                          {getStatusLabel(contract.status)}
+                        </span>
+                        <button
+                          onClick={() => openTimeline(contract)}
+                          className="rounded-lg bg-slate-500/10 px-2 py-1.5 text-xs text-slate-400 hover:bg-slate-500/20"
+                          title="查看时间线"
+                        >
+                          <Clock className="h-4 w-4" />
+                        </button>
+                        {(contract.status === 'active' || contract.status === 'expiring') && (
+                          <>
+                            <button
+                              onClick={() => openEmailPreview(contract)}
+                              className="rounded-lg bg-purple-500/10 px-2 py-1.5 text-xs text-purple-400 hover:bg-purple-500/20"
+                              title="预览提醒邮件"
+                            >
+                              <Mail className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => { setSelectedContract(contract); setShowRenewModal(true); }}
+                              className="rounded-lg bg-sky-500/10 px-3 py-1.5 text-xs text-sky-400 hover:bg-sky-500/20"
+                            >
+                              续签
+                            </button>
+                          </>
+                        )}
+                        <button
+                          onClick={() => setExpandedContract(expandedContract === contract.id ? null : contract.id)}
+                          className="rounded-lg bg-slate-500/10 p-1.5 text-slate-400 hover:bg-slate-500/20"
+                        >
+                          {expandedContract === contract.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    {expandedContract === contract.id && (
+                      <div className="border-t border-[#1e293b] bg-[#0a0e1a] p-4">
+                        <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
+                          <div>
+                            <p className="text-slate-500">合同类型</p>
+                            <p className="text-white">{contract.contractType === 'regular' ? '正式合同' : contract.contractType === 'fixed_term' ? '固定期限' : '实习合同'}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500">员工ID</p>
+                            <p className="text-white">{contract.employeeId.slice(0, 8)}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500">续签状态</p>
+                            <p className="text-white">{contract.renewInitiatedBy ? '已发起' : '未发起'}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500">备注</p>
+                            <p className="text-white">{contract.renewNotes || '无'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {activeTab === 'rules' && (
+        <div className="rounded-xl border border-[#1e293b] bg-[#111827]">
+          <div className="border-b border-[#1e293b] p-4">
+            <h2 className="text-lg font-semibold text-white">提醒规则配置</h2>
+            <p className="mt-1 text-sm text-slate-400">配置合同到期前的自动提醒规则（T-45/T-30/T-15/T-7）</p>
+          </div>
+          <div className="divide-y divide-[#1e293b]">
+            {reminderRules.map(rule => (
+              <div key={rule.id} className="flex items-center justify-between p-4">
+                <div className="flex items-center gap-4">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${rule.enabled ? 'bg-sky-500/10' : 'bg-slate-500/10'}`}>
+                    <Bell className={`h-5 w-5 ${rule.enabled ? 'text-sky-400' : 'text-slate-500'}`} />
+                  </div>
+                  <div>
+                    <p className="font-medium text-white">{rule.name} 提醒</p>
+                    <p className="text-xs text-slate-400">
+                      到期前 {rule.daysBefore} 天 · 接收人：{rule.recipientTypes.join(', ')}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => openEmailPreview({ id: 'preview', employeeId: 'demo', employeeName: '演示员工', department: '技术部', position: '工程师', contractType: 'regular', startDate: '', endDate: '' } as Contract, rule.name)}
+                    className="rounded-lg bg-purple-500/10 px-3 py-1.5 text-xs text-purple-400 hover:bg-purple-500/20"
+                  >
+                    预览邮件
+                  </button>
+                  <label className="relative inline-flex cursor-pointer items-center">
+                    <input
+                      type="checkbox"
+                      checked={rule.enabled}
+                      onChange={() => handleToggleRule(rule.id, !rule.enabled)}
+                      className="peer sr-only"
+                    />
+                    <div className="peer h-6 w-11 rounded-full bg-slate-700 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-slate-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-sky-500 peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+
+      {activeTab === 'summary' && weeklySummary && (
+        <div className="space-y-6">
+          <div className="rounded-xl border border-[#1e293b] bg-[#111827] p-4">
+            <h2 className="text-lg font-semibold text-white">
+              周报摘要 ({weeklySummary.period.start} ~ {weeklySummary.period.end})
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
+              <p className="text-2xl font-bold text-sky-400">{weeklySummary.pending.total}</p>
+              <p className="text-sm text-slate-400">本周待处理</p>
+              <div className="mt-2 space-y-1">
+                {weeklySummary.pending.items.slice(0, 3).map((item, i) => (
+                  <p key={i} className="text-xs text-slate-500">{item.employeeName} - {item.reminderType}</p>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+              <p className="text-2xl font-bold text-red-400">{weeklySummary.overdue.total}</p>
+              <p className="text-sm text-slate-400">逾期风险</p>
+              <div className="mt-2 space-y-1">
+                {weeklySummary.overdue.items.slice(0, 3).map((item, i) => (
+                  <p key={i} className="text-xs text-slate-500">{item.employeeName} - 逾期{item.daysOverdue}天</p>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-4">
+              <p className="text-2xl font-bold text-green-400">{weeklySummary.completed.total}</p>
+              <p className="text-sm text-slate-400">本周已完成</p>
+              <div className="mt-2 space-y-1">
+                {weeklySummary.completed.items.slice(0, 3).map((item, i) => (
+                  <p key={i} className="text-xs text-slate-500">{item.employeeName}</p>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4">
+              <p className="text-2xl font-bold text-yellow-400">{weeklySummary.upcoming.total}</p>
+              <p className="text-sm text-slate-400">未来30天到期</p>
+              <div className="mt-2 space-y-1">
+                {weeklySummary.upcoming.items.slice(0, 3).map((item, i) => (
+                  <p key={i} className="text-xs text-slate-500">{item.employeeName} - {item.daysLeft}天</p>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add Contract Modal */}
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="新建合同">
@@ -312,6 +593,77 @@ export default function ContractsPage() {
                   </button>
                 </>
               )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Timeline Modal */}
+      <Modal isOpen={showTimelineModal} onClose={() => setShowTimelineModal(false)} title="合同状态追踪">
+        {selectedContract && (
+          <div className="space-y-4">
+            <div className="rounded-lg bg-[#0a0e1a] p-4">
+              <p className="font-medium text-white">{selectedContract.employeeName}</p>
+              <p className="text-sm text-slate-400">{selectedContract.department} · {selectedContract.position}</p>
+            </div>
+            <div className="max-h-96 overflow-y-auto">
+              {timeline.length === 0 ? (
+                <p className="py-4 text-center text-slate-500">暂无时间线记录</p>
+              ) : (
+                <div className="space-y-4">
+                  {timeline.map((event, index) => (
+                    <div key={event.id} className="relative flex gap-4">
+                      {index < timeline.length - 1 && (
+                        <div className="absolute left-4 top-8 h-full w-px bg-[#1e293b]" />
+                      )}
+                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${event.type === 'system' ? 'bg-slate-500/20' : event.type === 'action' ? 'bg-sky-500/20' : 'bg-green-500/20'}`}>
+                        {event.type === 'system' ? <FileSignature className="h-4 w-4 text-slate-400" /> :
+                         event.type === 'action' ? <CheckCircle className="h-4 w-4 text-sky-400" /> :
+                         <Bell className="h-4 w-4 text-green-400" />}
+                      </div>
+                      <div className="flex-1 pb-4">
+                        <p className="font-medium text-white">{event.title}</p>
+                        <p className="text-sm text-slate-400">{event.description}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {new Date(event.timestamp).toLocaleString()} · {event.actor}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Email Preview Modal */}
+      <Modal isOpen={showEmailModal} onClose={() => setShowEmailModal(false)} title="邮件预览">
+        {emailPreview && (
+          <div className="space-y-4">
+            <div className="rounded-lg bg-[#0a0e1a] p-4">
+              <div className="space-y-2 text-sm">
+                <div>
+                  <span className="text-slate-500">收件人：</span>
+                  <span className="text-white">{emailPreview.to}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">抄送：</span>
+                  <span className="text-white">{emailPreview.cc}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">主题：</span>
+                  <span className="font-medium text-white">{emailPreview.subject}</span>
+                </div>
+              </div>
+            </div>
+            <div className="max-h-96 overflow-y-auto rounded-lg bg-[#0a0e1a] p-4">
+              <pre className="whitespace-pre-wrap font-sans text-sm text-slate-300">{emailPreview.body}</pre>
+            </div>
+            <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3">
+              <p className="text-xs text-purple-400">
+                说明：本邮件由 AI 辅助生成，具体续签决定需由业务经理与 HRBP/RP 按公司流程人工确认。
+              </p>
             </div>
           </div>
         )}

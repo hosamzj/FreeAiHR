@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { UserPlus, CheckCircle, Clock, AlertCircle, RefreshCw, Plus } from 'lucide-react';
+import { UserPlus, CheckCircle, Clock, AlertCircle, RefreshCw, Plus, Bell, Calendar, Mail, FileText } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
 
 interface OnboardingTask {
@@ -19,6 +19,7 @@ interface Onboarding {
   id: string;
   candidateId: string;
   employeeName: string;
+  employeeId?: string;
   position?: string;
   department?: string;
   startDate: string;
@@ -30,15 +31,39 @@ interface Onboarding {
   daysSinceStart: number;
   day7FollowUp?: boolean;
   day30FollowUp?: boolean;
+  anomalies?: string[];
+}
+
+interface DailySummary {
+  date: string;
+  completedCount: number;
+  anomalyCount: number;
+  pendingCount: number;
+  completed: Onboarding[];
+  anomalies: Onboarding[];
+}
+
+interface NotificationRule {
+  id: string;
+  trigger: string;
+  recipients: string[];
+  action: string;
+  enabled: boolean;
 }
 
 export default function OnboardingPage() {
+  const [activeTab, setActiveTab] = useState<'list' | 'daily' | 'rules'>('list');
   const [onboardings, setOnboardings] = useState<Onboarding[]>([]);
   const [stats, setStats] = useState({ total: 0, pending: 0, inProgress: 0, completed: 0, needFollowUp: 0 });
   const [loading, setLoading] = useState(true);
   const [showInitModal, setShowInitModal] = useState(false);
   const [selectedOnboarding, setSelectedOnboarding] = useState<Onboarding | null>(null);
   const [newOnboarding, setNewOnboarding] = useState({ candidateId: '', employeeName: '', position: '', department: '', startDate: '' });
+  const [dailySummary, setDailySummary] = useState<DailySummary | null>(null);
+  const [notificationRules, setNotificationRules] = useState<NotificationRule[]>([]);
+  const [showEmailPreview, setShowEmailPreview] = useState(false);
+  const [emailContent, setEmailContent] = useState('');
+  const [timeline, setTimeline] = useState<{ time: string; action: string; user: string }[]>([]);
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -51,9 +76,34 @@ export default function OnboardingPage() {
     }
   }, []);
 
+  const loadDailySummary = useCallback(async () => {
+    try {
+      const res = await fetch('/api/onboarding/daily-summary');
+      const data = await res.json();
+      setDailySummary(data.data || null);
+    } catch (e) {
+      console.error('Load daily summary error:', e);
+    }
+  }, []);
+
+  const loadNotificationRules = useCallback(async () => {
+    try {
+      const res = await fetch('/api/onboarding/notification-rules');
+      const data = await res.json();
+      setNotificationRules(data.data?.rules || []);
+    } catch (e) {
+      console.error('Load notification rules error:', e);
+    }
+  }, []);
+
   useEffect(() => {
     loadDashboard().finally(() => setLoading(false));
   }, [loadDashboard]);
+
+  useEffect(() => {
+    if (activeTab === 'daily') loadDailySummary();
+    if (activeTab === 'rules') loadNotificationRules();
+  }, [activeTab, loadDailySummary, loadNotificationRules]);
 
   const handleInitiate = async () => {
     try {
@@ -87,6 +137,27 @@ export default function OnboardingPage() {
       }
     } catch (e) {
       console.error('Complete task error:', e);
+    }
+  };
+
+  const loadTimeline = async (onboardingId: string) => {
+    try {
+      const res = await fetch(`/api/onboarding/${onboardingId}/timeline`);
+      const data = await res.json();
+      setTimeline(data.data?.timeline || []);
+    } catch (e) {
+      console.error('Load timeline error:', e);
+    }
+  };
+
+  const previewEmail = async (onboardingId: string) => {
+    try {
+      const res = await fetch(`/api/onboarding/${onboardingId}/preview-email`);
+      const data = await res.json();
+      setEmailContent(data.data?.email || '');
+      setShowEmailPreview(true);
+    } catch (e) {
+      console.error('Preview email error:', e);
     }
   };
 
@@ -134,87 +205,186 @@ export default function OnboardingPage() {
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-        <div className="rounded-xl border border-[#1e293b] bg-[#111827] p-4">
-          <p className="text-2xl font-bold text-white">{stats.total}</p>
-          <p className="text-xs text-slate-400">总入职</p>
-        </div>
-        <div className="rounded-xl border border-[#1e293b] bg-[#111827] p-4">
-          <p className="text-2xl font-bold text-yellow-400">{stats.pending}</p>
-          <p className="text-xs text-slate-400">待入职</p>
-        </div>
-        <div className="rounded-xl border border-[#1e293b] bg-[#111827] p-4">
-          <p className="text-2xl font-bold text-sky-400">{stats.inProgress}</p>
-          <p className="text-xs text-slate-400">入职中</p>
-        </div>
-        <div className="rounded-xl border border-[#1e293b] bg-[#111827] p-4">
-          <p className="text-2xl font-bold text-green-400">{stats.completed}</p>
-          <p className="text-xs text-slate-400">已完成</p>
-        </div>
-        <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
-          <p className="text-2xl font-bold text-red-400">{stats.needFollowUp}</p>
-          <p className="text-xs text-slate-400">待回访</p>
-        </div>
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-[#1e293b]">
+        <button
+          onClick={() => setActiveTab('list')}
+          className={`flex items-center gap-2 border-b-2 px-4 py-2 text-sm ${activeTab === 'list' ? 'border-sky-400 text-sky-400' : 'border-transparent text-slate-400 hover:text-white'}`}
+        >
+          <UserPlus className="h-4 w-4" />
+          入职列表
+        </button>
+        <button
+          onClick={() => setActiveTab('daily')}
+          className={`flex items-center gap-2 border-b-2 px-4 py-2 text-sm ${activeTab === 'daily' ? 'border-sky-400 text-sky-400' : 'border-transparent text-slate-400 hover:text-white'}`}
+        >
+          <Calendar className="h-4 w-4" />
+          每日汇总
+        </button>
+        <button
+          onClick={() => setActiveTab('rules')}
+          className={`flex items-center gap-2 border-b-2 px-4 py-2 text-sm ${activeTab === 'rules' ? 'border-sky-400 text-sky-400' : 'border-transparent text-slate-400 hover:text-white'}`}
+        >
+          <Bell className="h-4 w-4" />
+          通知规则
+        </button>
       </div>
 
-      {/* Onboarding List */}
-      <div className="rounded-xl border border-[#1e293b] bg-[#111827]">
-        <div className="border-b border-[#1e293b] p-4">
-          <h2 className="text-lg font-semibold text-white">入职列表</h2>
-        </div>
-        <div className="divide-y divide-[#1e293b]">
-          {onboardings.length === 0 ? (
-            <div className="p-8 text-center text-slate-500">暂无入职记录</div>
-          ) : (
-            onboardings.map(ob => (
-              <div key={ob.id} className="p-4 hover:bg-[#1a2236]">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-500/10">
-                      <UserPlus className="h-5 w-5 text-sky-400" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-white">{ob.employeeName}</p>
-                      <p className="text-xs text-slate-400">
-                        {ob.department} · {ob.position} · 入职日期: {new Date(ob.startDate).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-24 overflow-hidden rounded-full bg-[#1e293b]">
-                          <div className="h-full bg-sky-500 transition-all" style={{ width: `${ob.progress}%` }} />
+      {/* Tab Content */}
+      {activeTab === 'list' && (
+        <>
+          {/* Stats */}
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+            <div className="rounded-xl border border-[#1e293b] bg-[#111827] p-4">
+              <p className="text-2xl font-bold text-white">{stats.total}</p>
+              <p className="text-xs text-slate-400">总入职</p>
+            </div>
+            <div className="rounded-xl border border-[#1e293b] bg-[#111827] p-4">
+              <p className="text-2xl font-bold text-yellow-400">{stats.pending}</p>
+              <p className="text-xs text-slate-400">待入职</p>
+            </div>
+            <div className="rounded-xl border border-[#1e293b] bg-[#111827] p-4">
+              <p className="text-2xl font-bold text-sky-400">{stats.inProgress}</p>
+              <p className="text-xs text-slate-400">入职中</p>
+            </div>
+            <div className="rounded-xl border border-[#1e293b] bg-[#111827] p-4">
+              <p className="text-2xl font-bold text-green-400">{stats.completed}</p>
+              <p className="text-xs text-slate-400">已完成</p>
+            </div>
+            <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+              <p className="text-2xl font-bold text-red-400">{stats.needFollowUp}</p>
+              <p className="text-xs text-slate-400">待回访</p>
+            </div>
+          </div>
+
+          {/* Onboarding List */}
+          <div className="rounded-xl border border-[#1e293b] bg-[#111827]">
+            <div className="border-b border-[#1e293b] p-4">
+              <h2 className="text-lg font-semibold text-white">入职列表</h2>
+            </div>
+            <div className="divide-y divide-[#1e293b]">
+              {onboardings.length === 0 ? (
+                <div className="p-8 text-center text-slate-500">暂无入职记录</div>
+              ) : (
+                onboardings.map(ob => (
+                  <div key={ob.id} className={`p-4 hover:bg-[#1a2236] ${ob.anomalies && ob.anomalies.length > 0 ? 'border-l-2 border-l-red-500' : ''}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${ob.anomalies && ob.anomalies.length > 0 ? 'bg-red-500/10' : 'bg-sky-500/10'}`}>
+                          <UserPlus className={`h-5 w-5 ${ob.anomalies && ob.anomalies.length > 0 ? 'text-red-400' : 'text-sky-400'}`} />
                         </div>
-                        <span className="text-xs text-slate-400">{ob.progress}%</span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-white">{ob.employeeName}</p>
+                            {ob.anomalies && ob.anomalies.length > 0 && (
+                              <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-xs text-red-400">异常</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-400">
+                            {ob.department} · {ob.position} · 入职日期: {new Date(ob.startDate).toLocaleDateString()}
+                          </p>
+                        </div>
                       </div>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {ob.completedTasks}/{ob.totalTasks} 任务完成
-                      </p>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <div className="flex items-center gap-2">
+                            <div className="h-2 w-24 overflow-hidden rounded-full bg-[#1e293b]">
+                              <div className="h-full bg-sky-500 transition-all" style={{ width: `${ob.progress}%` }} />
+                            </div>
+                            <span className="text-xs text-slate-400">{ob.progress}%</span>
+                          </div>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {ob.completedTasks}/{ob.totalTasks} 任务完成
+                          </p>
+                        </div>
+                        <span className={`rounded-full px-2 py-1 text-xs ${getStatusColor(ob.status)}`}>
+                          {ob.status === 'pending' ? '待入职' : ob.status === 'in_progress' ? '入职中' : ob.status === 'completed' ? '已完成' : ob.status}
+                        </span>
+                        <button
+                          onClick={() => { setSelectedOnboarding(ob); loadTimeline(ob.id); }}
+                          className="rounded-lg bg-[#1a2236] px-3 py-1.5 text-xs text-slate-300 hover:bg-[#253049]"
+                        >
+                          查看详情
+                        </button>
+                      </div>
                     </div>
-                    <span className={`rounded-full px-2 py-1 text-xs ${getStatusColor(ob.status)}`}>
-                      {ob.status === 'pending' ? '待入职' : ob.status === 'in_progress' ? '入职中' : ob.status === 'completed' ? '已完成' : ob.status}
-                    </span>
-                    <button
-                      onClick={() => setSelectedOnboarding(ob)}
-                      className="rounded-lg bg-[#1a2236] px-3 py-1.5 text-xs text-slate-300 hover:bg-[#253049]"
-                    >
-                      查看详情
-                    </button>
+                    {ob.anomalies && ob.anomalies.length > 0 && (
+                      <div className="mt-2 rounded-lg bg-red-500/10 px-3 py-2">
+                        <p className="text-xs text-red-400">异常项: {ob.anomalies.join(', ')}</p>
+                      </div>
+                    )}
+                    {ob.daysSinceStart >= 7 && !ob.day7FollowUp && (
+                      <div className="mt-2 flex items-center gap-2 rounded-lg bg-yellow-500/10 px-3 py-2">
+                        <AlertCircle className="h-4 w-4 text-yellow-400" />
+                        <span className="text-xs text-yellow-400">入职已满7天，请安排回访</span>
+                      </div>
+                    )}
                   </div>
-                </div>
-                {ob.daysSinceStart >= 7 && !ob.day7FollowUp && (
-                  <div className="mt-2 flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2">
-                    <AlertCircle className="h-4 w-4 text-red-400" />
-                    <span className="text-xs text-red-400">入职已满7天，请安排回访</span>
-                  </div>
-                )}
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {activeTab === 'daily' && dailySummary && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">每日汇总 - {new Date(dailySummary.date).toLocaleDateString()}</h2>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-6">
+              <p className="text-3xl font-bold text-green-400">{dailySummary.completedCount}</p>
+              <p className="mt-1 text-sm text-slate-400">当日完成入职</p>
+            </div>
+            <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-6">
+              <p className="text-3xl font-bold text-red-400">{dailySummary.anomalyCount}</p>
+              <p className="mt-1 text-sm text-slate-400">异常记录</p>
+            </div>
+            <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-6">
+              <p className="text-3xl font-bold text-yellow-400">{dailySummary.pendingCount}</p>
+              <p className="mt-1 text-sm text-slate-400">待处理</p>
+            </div>
+          </div>
+          {dailySummary.anomalies.length > 0 && (
+            <div className="rounded-xl border border-red-500/20 bg-[#111827]">
+              <div className="border-b border-red-500/20 p-4">
+                <h3 className="text-sm font-medium text-red-400">异常记录</h3>
               </div>
-            ))
+              <div className="divide-y divide-[#1e293b]">
+                {dailySummary.anomalies.map(ob => (
+                  <div key={ob.id} className="p-4">
+                    <p className="font-medium text-white">{ob.employeeName}</p>
+                    <p className="text-xs text-red-400">{ob.anomalies?.join(', ')}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
-      </div>
+      )}
+
+      {activeTab === 'rules' && (
+        <div className="rounded-xl border border-[#1e293b] bg-[#111827]">
+          <div className="border-b border-[#1e293b] p-4">
+            <h2 className="text-lg font-semibold text-white">通知规则配置</h2>
+          </div>
+          <div className="divide-y divide-[#1e293b]">
+            {notificationRules.map(rule => (
+              <div key={rule.id} className="flex items-center justify-between p-4">
+                <div>
+                  <p className="font-medium text-white">{rule.trigger}</p>
+                  <p className="text-xs text-slate-400">接收人: {rule.recipients.join(', ')}</p>
+                  <p className="text-xs text-slate-500">动作: {rule.action}</p>
+                </div>
+                <span className={`rounded-full px-2 py-1 text-xs ${rule.enabled ? 'bg-green-500/10 text-green-400' : 'bg-slate-500/10 text-slate-400'}`}>
+                  {rule.enabled ? '已启用' : '已禁用'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Initiate Modal */}
       <Modal isOpen={showInitModal} onClose={() => setShowInitModal(false)} title="发起入职">
@@ -275,6 +445,24 @@ export default function OnboardingPage() {
               <p className="text-sm text-slate-400">{selectedOnboarding.department} · {selectedOnboarding.position}</p>
               <p className="mt-2 text-sm text-slate-400">入职日期: {new Date(selectedOnboarding.startDate).toLocaleDateString()}</p>
             </div>
+            
+            {/* Timeline */}
+            {timeline.length > 0 && (
+              <div>
+                <h3 className="mb-2 text-sm font-medium text-slate-300">状态时间线</h3>
+                <div className="space-y-2 rounded-lg bg-[#0a0e1a] p-3">
+                  {timeline.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-3 text-xs">
+                      <span className="text-slate-500">{item.time}</span>
+                      <span className="text-white">{item.action}</span>
+                      <span className="text-slate-400">by {item.user}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Tasks */}
             <div>
               <h3 className="mb-2 text-sm font-medium text-slate-300">入职任务</h3>
               <div className="space-y-2">
@@ -300,8 +488,33 @@ export default function OnboardingPage() {
                 ))}
               </div>
             </div>
+
+            {/* Actions */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => previewEmail(selectedOnboarding.id)}
+                className="flex items-center gap-2 rounded-lg bg-[#1a2236] px-3 py-2 text-sm text-slate-300 hover:bg-[#253049]"
+              >
+                <Mail className="h-4 w-4" />
+                预览通知邮件
+              </button>
+            </div>
           </div>
         )}
+      </Modal>
+
+      {/* Email Preview Modal */}
+      <Modal isOpen={showEmailPreview} onClose={() => setShowEmailPreview(false)} title="邮件预览">
+        <div className="space-y-4">
+          <div className="rounded-lg bg-[#0a0e1a] p-4">
+            <pre className="whitespace-pre-wrap text-sm text-slate-300">{emailContent}</pre>
+          </div>
+          <div className="rounded-lg bg-yellow-500/10 p-3">
+            <p className="text-xs text-yellow-400">
+              说明：本通知由AI辅助生成，入职状态以HRS系统记录为准。
+            </p>
+          </div>
+        </div>
       </Modal>
     </div>
   );
