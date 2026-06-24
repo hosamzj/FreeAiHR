@@ -455,42 +455,42 @@ export default function ContractsPage() {
         <div className="space-y-6">
           <div className="rounded-xl border border-[#1e293b] bg-[#111827] p-4">
             <h2 className="text-lg font-semibold text-white">
-              周报摘要 ({weeklySummary.period.start} ~ {weeklySummary.period.end})
+              周报摘要 ({weeklySummary.period?.start || 'N/A'} ~ {weeklySummary.period?.end || 'N/A'})
             </h2>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
             <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
-              <p className="text-2xl font-bold text-sky-400">{weeklySummary.pending.total}</p>
+              <p className="text-2xl font-bold text-sky-400">{weeklySummary.pending?.total || 0}</p>
               <p className="text-sm text-slate-400">本周待处理</p>
               <div className="mt-2 space-y-1">
-                {weeklySummary.pending.items.slice(0, 3).map((item, i) => (
+                {(weeklySummary.pending?.items || []).slice(0, 3).map((item, i) => (
                   <p key={i} className="text-xs text-slate-500">{item.employeeName} - {item.reminderType}</p>
                 ))}
               </div>
             </div>
             <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
-              <p className="text-2xl font-bold text-red-400">{weeklySummary.overdue.total}</p>
+              <p className="text-2xl font-bold text-red-400">{weeklySummary.overdue?.total || 0}</p>
               <p className="text-sm text-slate-400">逾期风险</p>
               <div className="mt-2 space-y-1">
-                {weeklySummary.overdue.items.slice(0, 3).map((item, i) => (
+                {(weeklySummary.overdue?.items || []).slice(0, 3).map((item, i) => (
                   <p key={i} className="text-xs text-slate-500">{item.employeeName} - 逾期{item.daysOverdue}天</p>
                 ))}
               </div>
             </div>
             <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-4">
-              <p className="text-2xl font-bold text-green-400">{weeklySummary.completed.total}</p>
+              <p className="text-2xl font-bold text-green-400">{weeklySummary.completed?.total || 0}</p>
               <p className="text-sm text-slate-400">本周已完成</p>
               <div className="mt-2 space-y-1">
-                {weeklySummary.completed.items.slice(0, 3).map((item, i) => (
+                {(weeklySummary.completed?.items || []).slice(0, 3).map((item, i) => (
                   <p key={i} className="text-xs text-slate-500">{item.employeeName}</p>
                 ))}
               </div>
             </div>
             <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4">
-              <p className="text-2xl font-bold text-yellow-400">{weeklySummary.upcoming.total}</p>
+              <p className="text-2xl font-bold text-yellow-400">{weeklySummary.upcoming?.total || 0}</p>
               <p className="text-sm text-slate-400">未来30天到期</p>
               <div className="mt-2 space-y-1">
-                {weeklySummary.upcoming.items.slice(0, 3).map((item, i) => (
+                {(weeklySummary.upcoming?.items || []).slice(0, 3).map((item, i) => (
                   <p key={i} className="text-xs text-slate-500">{item.employeeName} - {item.daysLeft}天</p>
                 ))}
               </div>
