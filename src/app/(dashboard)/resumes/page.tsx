@@ -22,11 +22,18 @@ import {
   DollarSign,
   UserCheck,
   UserX,
+  Bot,
+  Brain,
+  AlertTriangle,
+  SkipForward,
+  Copy,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { mockCandidates, mockParsedResume } from '@/lib/mock-data';
 import { Modal } from '@/components/ui/modal';
 import { ResumePreviewModal } from '@/components/resume-preview-modal';
+import { AIJDModal } from '@/components/ai-jd-modal';
+import { AICandidateProfile } from '@/components/ai-candidate-profile';
 
 type CandidateStatus = 'new' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected';
 type TabType = 'all' | CandidateStatus;
@@ -48,6 +55,19 @@ export default function ResumesPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showResumePreview, setShowResumePreview] = useState(false);
   const [resumePreviewData, setResumePreviewData] = useState<{ id: string; name: string; position?: string; resumeUrl?: string } | null>(null);
+
+  // AI features state
+  const [showAIJDModal, setShowAIJDModal] = useState(false);
+  const [showAIProfileModal, setShowAIProfileModal] = useState(false);
+  const [aiProfileCandidate, setAiProfileCandidate] = useState<{ id: string; name: string; position?: string } | null>(null);
+
+  // Duplicate detection state
+  const [duplicateInfo, setDuplicateInfo] = useState<{
+    isDuplicate: boolean;
+    duplicates: { id: string; name: string; email?: string; phone?: string; duplicateFields: string[] }[];
+    pendingFile: File | null;
+  } | null>(null);
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
 
   // Interview scheduling state
   const [interviewers, setInterviewers] = useState<{ id: string; name: string; department?: string }[]>([]);
@@ -166,15 +186,56 @@ export default function ResumesPage() {
     fileInputRef.current?.click();
   }, []);
 
-  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setIsParsing(true);
-      setTimeout(() => {
-        setIsParsing(false);
-        setParsedResult(mockParsedResume);
-      }, 2500);
+    if (!file) return;
+
+    // Check for duplicates first by trying to parse the filename
+    setCheckingDuplicate(true);
+    try {
+      // Extract potential info from filename for duplicate check
+      const fileName = file.name.replace(/\.(pdf|doc|docx|png|jpg|jpeg)$/i, '');
+      const res = await fetch('/api/candidates/check-duplicate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: fileName }),
+      });
+      const data = await res.json();
+      if (data.code === 0 && data.data?.isDuplicate && data.data.duplicates?.length > 0) {
+        setDuplicateInfo({
+          isDuplicate: true,
+          duplicates: data.data.duplicates,
+          pendingFile: file,
+        });
+        setCheckingDuplicate(false);
+        return;
+      }
+    } catch {
+      // If check fails, proceed with upload
     }
+    setCheckingDuplicate(false);
+
+    // No duplicate found, proceed with parsing
+    setIsParsing(true);
+    setTimeout(() => {
+      setIsParsing(false);
+      setParsedResult(mockParsedResume);
+    }, 2500);
+  }, []);
+
+  // Handle duplicate resolution
+  const handleDuplicateAction = useCallback((action: 'skip' | 'overwrite' | 'keep') => {
+    if (action === 'skip') {
+      setDuplicateInfo(null);
+      return;
+    }
+    // For overwrite or keep, proceed with parsing
+    setDuplicateInfo(null);
+    setIsParsing(true);
+    setTimeout(() => {
+      setIsParsing(false);
+      setParsedResult(mockParsedResume);
+    }, 2500);
   }, []);
 
   const handlePassScreen = useCallback(async (candidateId: string, candidateName: string) => {
@@ -462,6 +523,14 @@ export default function ResumesPage() {
           </button>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowAIJDModal(true)}
+            className="flex h-9 items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2.5 text-sm text-sky-400 hover:bg-sky-500/20 transition-colors sm:px-3"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">AI生成JD</span>
+            <span className="sm:hidden">JD</span>
+          </button>
           <button
             onClick={() => setShowImportModal(true)}
             className="flex h-9 items-center gap-1.5 rounded-lg border border-[#1e293b] bg-[#111827] px-2.5 text-sm text-slate-400 hover:text-white transition-colors sm:px-3"
@@ -757,6 +826,21 @@ export default function ResumesPage() {
                   >
                     <FileText className="h-3 w-3" />
                     {candidate.resumeUrl ? '查看简历' : '上传简历'}
+                  </button>
+                  {/* AI画像按钮 */}
+                  <button
+                    onClick={() => {
+                      setAiProfileCandidate({
+                        id: candidate.id,
+                        name: candidate.name,
+                        position: candidate.position,
+                      });
+                      setShowAIProfileModal(true);
+                    }}
+                    className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-orange-500/20 px-2.5 md:px-3 text-[11px] md:text-xs text-orange-400 hover:bg-orange-500/10 cursor-pointer transition-colors"
+                  >
+                    <Brain className="h-3 w-3" />
+                    AI画像
                   </button>
 
                   {/* 新简历 → 通过筛选、淘汰 */}
@@ -1312,6 +1396,96 @@ export default function ResumesPage() {
           }}
         />
       )}
+
+      {/* AI JD Modal */}
+      <AIJDModal isOpen={showAIJDModal} onClose={() => setShowAIJDModal(false)} />
+
+      {/* Duplicate Detection Modal */}
+      <Modal isOpen={!!duplicateInfo} onClose={() => setDuplicateInfo(null)} title="检测到重复候选人">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 rounded-lg bg-amber-500/5 border border-amber-500/20 p-3">
+            <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0" />
+            <p className="text-xs text-amber-400">系统中已存在相似候选人，请选择处理方式</p>
+          </div>
+
+          <div className="space-y-2">
+            {duplicateInfo?.duplicates.map((dup) => (
+              <div key={dup.id} className="p-3 bg-[#0a0e1a] border border-slate-800 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-700 text-xs font-medium text-slate-300">
+                    {dup.name.charAt(0)}
+                  </div>
+                  <div>
+                    <p className="text-sm text-white">{dup.name}</p>
+                    <p className="text-xs text-slate-500">
+                      {[dup.email, dup.phone].filter(Boolean).join(' · ') || '无联系方式'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 mt-2">
+                  <span className="text-[10px] text-slate-500">重复字段:</span>
+                  {dup.duplicateFields.map((field) => (
+                    <span key={field} className="px-1.5 py-0.5 rounded bg-amber-500/10 text-[10px] text-amber-400">
+                      {field === 'email' ? '邮箱' : field === 'phone' ? '手机' : field}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 pt-2">
+            <button
+              onClick={() => handleDuplicateAction('skip')}
+              className="flex flex-col items-center gap-1 p-3 rounded-lg border border-slate-700 bg-[#0a0e1a] hover:border-slate-600 transition-colors"
+            >
+              <SkipForward className="w-4 h-4 text-slate-400" />
+              <span className="text-xs text-slate-300">跳过</span>
+            </button>
+            <button
+              onClick={() => handleDuplicateAction('overwrite')}
+              className="flex flex-col items-center gap-1 p-3 rounded-lg border border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 transition-colors"
+            >
+              <RotateCcw className="w-4 h-4 text-amber-400" />
+              <span className="text-xs text-amber-400">覆盖</span>
+            </button>
+            <button
+              onClick={() => handleDuplicateAction('keep')}
+              className="flex flex-col items-center gap-1 p-3 rounded-lg border border-sky-500/30 bg-sky-500/5 hover:bg-sky-500/10 transition-colors"
+            >
+              <Copy className="w-4 h-4 text-sky-400" />
+              <span className="text-xs text-sky-400">保留两份</span>
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* AI Candidate Profile Modal */}
+      <Modal
+        isOpen={showAIProfileModal}
+        onClose={() => {
+          setShowAIProfileModal(false);
+          setAiProfileCandidate(null);
+        }}
+        title={
+          <div className="flex items-center gap-2">
+            <Brain className="w-4 h-4 text-sky-400" />
+            <span>AI候选人画像</span>
+            {aiProfileCandidate && (
+              <span className="text-sm text-slate-400 font-normal">- {aiProfileCandidate.name}</span>
+            )}
+          </div>
+        }
+        size="lg"
+      >
+        {aiProfileCandidate && (
+          <AICandidateProfile
+            candidateId={aiProfileCandidate.id}
+            candidateName={aiProfileCandidate.name}
+            position={aiProfileCandidate.position}
+          />
+        )}
+      </Modal>
     </div>
   );
 }

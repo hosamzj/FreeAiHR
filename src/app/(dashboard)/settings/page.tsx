@@ -3,12 +3,12 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import {
-  Settings, Shield, Key, Building2, Save, Loader2, Check,
+  Settings, Shield, Key, Building2, Save, Loader2, Check, X,
   Globe, Lock, Mail, Download, Bot, AlertTriangle, Video, Plus, GripVertical, Trash2, Edit2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type TabId = 'sso' | 'password' | 'general' | 'collection' | 'interview_methods';
+type TabId = 'sso' | 'password' | 'general' | 'collection' | 'interview_methods' | 'ai';
 
 interface SSOCfg {
   enabled: boolean;
@@ -98,6 +98,17 @@ export default function SettingsPage() {
   const [editingMethodName, setEditingMethodName] = useState('');
   const [loadingMethods, setLoadingMethods] = useState(false);
 
+  // AI config state
+  const [aiConfig, setAiConfig] = useState({
+    provider: 'mock',
+    apiKey: '',
+    model: '',
+    baseUrl: '',
+  });
+  const [aiProviders, setAiProviders] = useState<{ id: string; name: string; defaultModel: string }[]>([]);
+  const [testingAI, setTestingAI] = useState(false);
+  const [aiTestResult, setAiTestResult] = useState<'success' | 'error' | null>(null);
+
   useEffect(() => {
     if (user?.role !== 'admin') return;
     fetch('/api/system/sso').then(r => r.json()).then(d => { if (d.code === 0) setSso(d.data); });
@@ -105,8 +116,48 @@ export default function SettingsPage() {
     fetch('/api/system/config').then(r => r.json()).then(d => { if (d.code === 0) setSysCfg(d.data); });
     // Fetch interview methods
     fetchInterviewMethods();
+    // Fetch AI config
+    fetchAIConfig();
     // Collection config is stored locally for now
   }, [user]);
+
+  const fetchAIConfig = async () => {
+    try {
+      const res = await fetch('/api/ai/config');
+      const data = await res.json();
+      if (data.code === 0) {
+        setAiConfig({
+          provider: data.data.provider || 'mock',
+          apiKey: data.data.apiKey || '',
+          model: data.data.model || '',
+          baseUrl: data.data.baseUrl || '',
+        });
+        if (data.data.providers) {
+          setAiProviders(data.data.providers);
+        }
+      }
+    } catch (err) {
+      console.error('Fetch AI config error:', err);
+    }
+  };
+
+  const handleTestAI = async () => {
+    setTestingAI(true);
+    setAiTestResult(null);
+    try {
+      const res = await fetch('/api/ai/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...aiConfig, testConnection: true }),
+      });
+      const data = await res.json();
+      setAiTestResult(data.code === 0 ? 'success' : 'error');
+    } catch {
+      setAiTestResult('error');
+    } finally {
+      setTestingAI(false);
+    }
+  };
 
   const fetchInterviewMethods = async () => {
     setLoadingMethods(true);
@@ -175,18 +226,27 @@ export default function SettingsPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const endpoints: Record<string, { url: string; body: unknown }> = {
-        sso: { url: '/api/system/sso', body: sso },
-        password: { url: '/api/system/password-policy', body: pwdPolicy },
-        general: { url: '/api/system/config', body: sysCfg },
-        collection: { url: '/api/system/collection', body: collectionCfg },
-      };
-      const { url, body } = endpoints[activeTab];
-      await fetch(url, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      if (activeTab === 'ai') {
+        // AI config uses its own endpoint
+        await fetch('/api/ai/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(aiConfig),
+        });
+      } else {
+        const endpoints: Record<string, { url: string; body: unknown }> = {
+          sso: { url: '/api/system/sso', body: sso },
+          password: { url: '/api/system/password-policy', body: pwdPolicy },
+          general: { url: '/api/system/config', body: sysCfg },
+          collection: { url: '/api/system/collection', body: collectionCfg },
+        };
+        const { url, body } = endpoints[activeTab];
+        await fetch(url, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
@@ -210,6 +270,7 @@ export default function SettingsPage() {
     { id: 'general' as TabId, label: '基础配置', icon: Building2 },
     { id: 'collection' as TabId, label: '采集配置', icon: Download },
     { id: 'interview_methods' as TabId, label: '面试方式', icon: Video },
+    { id: 'ai' as TabId, label: 'AI配置', icon: Bot },
   ];
 
   return (
@@ -659,6 +720,150 @@ export default function SettingsPage() {
             <p className="text-xs text-sky-400">
               提示：面试方式将显示在新建面试表单的下拉列表中，供面试官和HR选择。
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* AI Config */}
+      {activeTab === 'ai' && (
+        <div className="space-y-6">
+          <div className="bg-[#111827] border border-slate-800 rounded-xl p-6 space-y-5">
+            <div>
+              <h3 className="text-lg font-medium text-white flex items-center gap-2">
+                <Bot className="w-5 h-5 text-sky-400" />
+                AI大模型配置
+              </h3>
+              <p className="text-sm text-slate-400 mt-1">配置AI服务用于JD生成、简历解析、候选人画像等功能</p>
+            </div>
+
+            <div className="space-y-4">
+              {/* Provider Selection */}
+              <div>
+                <label className="block text-sm text-slate-300 mb-2">LLM服务商</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {[
+                    { id: 'mock', name: '模拟模式', desc: '无需API Key' },
+                    ...aiProviders.map(p => ({ id: p.id, name: p.name, desc: '' })),
+                  ].map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        const provider = aiProviders.find(ap => ap.id === p.id);
+                        setAiConfig({
+                          ...aiConfig,
+                          provider: p.id,
+                          model: provider?.defaultModel || '',
+                          baseUrl: '',
+                        });
+                      }}
+                      className={cn(
+                        'p-3 rounded-lg border text-left transition-all',
+                        aiConfig.provider === p.id
+                          ? 'border-sky-500 bg-sky-500/10'
+                          : 'border-slate-700 bg-[#0a0e1a] hover:border-slate-600'
+                      )}
+                    >
+                      <p className="text-sm font-medium text-white">{p.name}</p>
+                      {p.desc && <p className="text-xs text-slate-500 mt-0.5">{p.desc}</p>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* API Key */}
+              {aiConfig.provider !== 'mock' && (
+                <>
+                  <div>
+                    <label className="block text-sm text-slate-300 mb-1">API Key</label>
+                    <input
+                      type="password"
+                      value={aiConfig.apiKey}
+                      onChange={(e) => setAiConfig({ ...aiConfig, apiKey: e.target.value })}
+                      placeholder="输入API Key..."
+                      className="w-full px-3 py-2 bg-[#0a0e1a] border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 font-mono"
+                    />
+                  </div>
+
+                  {/* Model */}
+                  <div>
+                    <label className="block text-sm text-slate-300 mb-1">模型</label>
+                    <input
+                      value={aiConfig.model}
+                      onChange={(e) => setAiConfig({ ...aiConfig, model: e.target.value })}
+                      placeholder={aiProviders.find(p => p.id === aiConfig.provider)?.defaultModel || '模型名称'}
+                      className="w-full px-3 py-2 bg-[#0a0e1a] border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                    />
+                  </div>
+
+                  {/* Base URL (for custom endpoints) */}
+                  <div>
+                    <label className="block text-sm text-slate-300 mb-1">
+                      API Base URL <span className="text-slate-500">(可选，留空使用默认)</span>
+                    </label>
+                    <input
+                      value={aiConfig.baseUrl}
+                      onChange={(e) => setAiConfig({ ...aiConfig, baseUrl: e.target.value })}
+                      placeholder="https://api.example.com/v1"
+                      className="w-full px-3 py-2 bg-[#0a0e1a] border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 font-mono"
+                    />
+                  </div>
+
+                  {/* Test Connection */}
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleTestAI}
+                      disabled={testingAI || !aiConfig.apiKey}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {testingAI ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Check className="w-4 h-4" />
+                      )}
+                      测试连通性
+                    </button>
+                    {aiTestResult === 'success' && (
+                      <span className="text-sm text-emerald-400 flex items-center gap-1">
+                        <Check className="w-4 h-4" /> 连接成功
+                      </span>
+                    )}
+                    {aiTestResult === 'error' && (
+                      <span className="text-sm text-red-400 flex items-center gap-1">
+                        <X className="w-4 h-4" /> 连接失败
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* Mock mode info */}
+              {aiConfig.provider === 'mock' && (
+                <div className="p-4 bg-sky-500/5 border border-sky-500/20 rounded-lg">
+                  <p className="text-sm text-sky-400">
+                    模拟模式下，AI功能将返回预设的示例数据，无需配置API Key。
+                    适合演示和测试使用。
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* AI Features Info */}
+          <div className="bg-[#111827] border border-slate-800 rounded-xl p-6 space-y-4">
+            <h4 className="text-sm font-medium text-white">AI功能说明</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                { name: 'AI生成JD', desc: '根据岗位信息自动生成职位描述' },
+                { name: '简历AI解析', desc: '自动提取简历中的关键信息' },
+                { name: '候选人AI画像', desc: '六维能力评估和人格分析' },
+                { name: 'AI面试题生成', desc: '根据岗位生成针对性面试题' },
+              ].map((feature) => (
+                <div key={feature.name} className="p-3 bg-[#0a0e1a] border border-slate-700 rounded-lg">
+                  <p className="text-sm font-medium text-white">{feature.name}</p>
+                  <p className="text-xs text-slate-400 mt-1">{feature.desc}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

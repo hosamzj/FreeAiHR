@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils';
 import { mockInterviewers } from '@/lib/mock-data';
 import { Modal } from '@/components/ui/modal';
 import { InterviewCalendar, InterviewCalendarMobile } from '@/components/interview-calendar';
+import { AIInterviewQuestionsModal } from '@/components/ai-interview-questions-modal';
 
 type ViewMode = 'calendar' | 'list';
 
@@ -102,6 +103,8 @@ export default function InterviewsPage() {
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [selectedInterview, setSelectedInterview] = useState<Interview | null>(null);
   const [showAIQuestions, setShowAIQuestions] = useState(false);
+  const [showAIGenerateModal, setShowAIGenerateModal] = useState(false);
+  const [aiGenerateTarget, setAiGenerateTarget] = useState<{ candidateId: string; candidateName: string; position?: string } | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState<CreateInterviewForm>({
@@ -504,6 +507,20 @@ export default function InterviewsPage() {
                       <button className="flex h-8 items-center gap-1.5 rounded-lg bg-sky-500 px-3 text-xs font-medium text-white hover:bg-sky-600 transition-colors">
                         <Mail className="h-3.5 w-3.5" /> 发送邀约
                       </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAiGenerateTarget({
+                            candidateId: interview.candidateId,
+                            candidateName: interview.candidateName,
+                            position: interview.position,
+                          });
+                          setShowAIGenerateModal(true);
+                        }}
+                        className="flex h-8 items-center gap-1.5 rounded-lg border border-orange-500/20 bg-orange-500/5 px-3 text-xs font-medium text-orange-400 hover:bg-orange-500/10 transition-colors"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" /> AI生成面试题
+                      </button>
                       <button className="flex h-8 items-center gap-1.5 rounded-lg border border-[#1e293b] px-3 text-xs text-slate-400 hover:text-white transition-colors">
                         <Video className="h-3.5 w-3.5" /> 会议链接
                       </button>
@@ -781,6 +798,20 @@ export default function InterviewsPage() {
           </div>
         </div>
       </Modal>
+
+      {/* AI Interview Questions Modal */}
+      {aiGenerateTarget && (
+        <AIInterviewQuestionsModal
+          isOpen={showAIGenerateModal}
+          onClose={() => {
+            setShowAIGenerateModal(false);
+            setAiGenerateTarget(null);
+          }}
+          candidateId={aiGenerateTarget.candidateId}
+          candidateName={aiGenerateTarget.candidateName}
+          position={aiGenerateTarget.position}
+        />
+      )}
     </div>
   );
 }

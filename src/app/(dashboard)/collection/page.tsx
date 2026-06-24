@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Search,
   Globe,
@@ -27,12 +27,18 @@ import {
   Shield,
   Clock,
   AlertTriangle,
+  Mail,
+  Pause,
+  StopCircle,
+  FileText,
+  Eye,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Modal } from '@/components/ui/modal';
 
 // Collection modes - only mock and RPA (platform API removed as 51job/Boss don't have open APIs)
 type CollectionMode = 'mock' | 'rpa';
+type CollectionTab = 'channels' | 'email' | 'tasks';
 
 interface CollectionModeConfig {
   id: CollectionMode;
@@ -113,6 +119,28 @@ export default function CollectionPage() {
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showImportResultModal, setShowImportResultModal] = useState(false);
 
+  // Tab state
+  const [activeTab, setActiveTab] = useState<CollectionTab>('channels');
+
+  // Email import state
+  const [emailConfigs, setEmailConfigs] = useState<Array<{
+    id: string; name: string; email: string; imapServer: string; imapPort: number; authCode: string; createdAt: string;
+  }>>([]);
+  const [showAddEmailModal, setShowAddEmailModal] = useState(false);
+  const [emailForm, setEmailForm] = useState({ email: '', imapServer: '', imapPort: '993', authCode: '', name: '' });
+  const [scanning, setScanning] = useState(false);
+  const [scanResults, setScanResults] = useState<Array<{
+    subject: string; from: string; date: string; attachments: string[]; imported: boolean;
+  }>>([]);
+  const [selectedEmailConfig, setSelectedEmailConfig] = useState('');
+
+  // Task management state
+  const [tasks, setTasks] = useState<Array<{
+    id: string; name: string; source: string; status: 'running' | 'paused' | 'completed' | 'failed';
+    collected: number; total: number; startedAt: string; duration: string;
+  }>>([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+
   // Collection mode state
   const [collectionMode, setCollectionMode] = useState<CollectionMode>('mock');
 
@@ -176,6 +204,60 @@ export default function CollectionPage() {
     if (PRESET_CHANNELS.find(c => c.id === channelId)) return;
     setChannels(prev => prev.filter(c => c.id !== channelId));
   }, []);
+
+  // Load tasks
+  const loadTasks = useCallback(async () => {
+    setLoadingTasks(true);
+    try {
+      const res = await fetch('/api/collection/tasks');
+      const data = await res.json();
+      setTasks(data.data || []);
+    } catch {
+      setTasks([]);
+    }
+    setLoadingTasks(false);
+  }, []);
+
+  // Load email configs
+  const loadEmailConfigs = useCallback(async () => {
+    try {
+      const res = await fetch('/api/collection/email-config');
+      const data = await res.json();
+      setEmailConfigs(data.data || []);
+    } catch {
+      setEmailConfigs([]);
+    }
+  }, []);
+
+  // Add email config
+  const handleAddEmailConfig = useCallback(async () => {
+    if (!emailForm.email || !emailForm.authCode) return;
+    try {
+      const res = await fetch('/api/collection/email-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: emailForm.name,
+          email: emailForm.email,
+          imapServer: emailForm.imapServer || 'imap.qq.com',
+          imapPort: parseInt(emailForm.imapPort) || 993,
+          authCode: emailForm.authCode,
+        }),
+      });
+      if (res.ok) {
+        setShowAddEmailModal(false);
+        setEmailForm({ email: '', imapServer: '', imapPort: '993', authCode: '', name: '' });
+        loadEmailConfigs();
+      }
+    } catch {
+      // ignore
+    }
+  }, [emailForm, loadEmailConfigs]);
+
+  // Load email configs on mount
+  useEffect(() => {
+    loadEmailConfigs();
+  }, [loadEmailConfigs]);
 
   // Handle start collection based on mode
   const handleStartCollection = useCallback(async () => {
@@ -312,6 +394,46 @@ export default function CollectionPage() {
         <p className="mt-0.5 text-xs text-slate-500">从招聘网站批量采集候选人简历，支持多种采集模式</p>
       </div>
 
+      {/* Tab bar */}
+      <div className="flex items-center gap-1 mb-6 bg-[#111827] rounded-lg p-1 w-fit">
+        <button
+          onClick={() => setActiveTab('channels')}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+            activeTab === 'channels'
+              ? 'bg-[#1a2236] text-[#38bdf8] shadow-sm'
+              : 'text-[#94a3b8] hover:text-[#e2e8f0]'
+          }`}
+        >
+          <Globe className="w-4 h-4 inline mr-1.5" />
+          渠道采集
+        </button>
+        <button
+          onClick={() => setActiveTab('email')}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+            activeTab === 'email'
+              ? 'bg-[#1a2236] text-[#38bdf8] shadow-sm'
+              : 'text-[#94a3b8] hover:text-[#e2e8f0]'
+          }`}
+        >
+          <Mail className="w-4 h-4 inline mr-1.5" />
+          邮箱导入
+        </button>
+        <button
+          onClick={() => { setActiveTab('tasks'); loadTasks(); }}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+            activeTab === 'tasks'
+              ? 'bg-[#1a2236] text-[#38bdf8] shadow-sm'
+              : 'text-[#94a3b8] hover:text-[#e2e8f0]'
+          }`}
+        >
+          <FileText className="w-4 h-4 inline mr-1.5" />
+          任务管理
+        </button>
+      </div>
+
+      {/* Channels Tab */}
+      {activeTab === 'channels' && (
+      <>
       {/* Channel Cards */}
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -368,6 +490,226 @@ export default function CollectionPage() {
           ))}
         </div>
       </div>
+      </>
+      )}
+
+      {/* Email Import Tab */}
+      {activeTab === 'email' && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-300">邮箱简历导入</h2>
+              <p className="text-xs text-slate-500 mt-1">配置IMAP邮箱，自动扫描简历邮件并导入候选人</p>
+            </div>
+            <button
+              onClick={() => setShowAddEmailModal(true)}
+              className="flex h-8 items-center gap-1.5 rounded-lg bg-[#1a2236] px-3 text-xs text-slate-300 hover:bg-[#243049] cursor-pointer transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" /> 添加邮箱
+            </button>
+          </div>
+
+          {/* Email configs list */}
+          {emailConfigs.length === 0 ? (
+            <div className="rounded-xl border border-[#1e293b] bg-[#111827] p-8 text-center">
+              <Mail className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+              <p className="text-sm text-slate-400 mb-1">暂无邮箱配置</p>
+              <p className="text-xs text-slate-500">添加IMAP邮箱后，可自动扫描简历邮件</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {emailConfigs.map(config => (
+                <div key={config.id} className="rounded-xl border border-[#1e293b] bg-[#111827] p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/10">
+                        <Mail className="h-4 w-4 text-sky-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-white">{config.name || config.email}</p>
+                        <p className="text-xs text-slate-500">{config.imapServer}:{config.imapPort}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={async () => {
+                          setSelectedEmailConfig(config.id);
+                          setScanning(true);
+                          try {
+                            const res = await fetch('/api/collection/email-scan', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ configId: config.id }),
+                            });
+                            const data = await res.json();
+                            setScanResults(data.data?.results || []);
+                          } catch {
+                            setScanResults([]);
+                          }
+                          setScanning(false);
+                        }}
+                        className="flex items-center gap-1.5 rounded-lg bg-sky-500/10 px-3 py-1.5 text-xs text-sky-400 hover:bg-sky-500/20 cursor-pointer transition-colors"
+                      >
+                        <RefreshCw className={cn('h-3.5 w-3.5', scanning && 'animate-spin')} />
+                        扫描邮箱
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const res = await fetch(`/api/collection/email-config?id=${config.id}`, { method: 'DELETE' });
+                          if (res.ok) {
+                            setEmailConfigs(prev => prev.filter(c => c.id !== config.id));
+                          }
+                        }}
+                        className="p-1.5 text-slate-500 hover:text-red-400 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Scan results */}
+          {scanResults.length > 0 && (
+            <div className="mt-4">
+              <h3 className="text-sm font-semibold text-slate-300 mb-3">扫描结果</h3>
+              <div className="space-y-2">
+                {scanResults.map((result, idx) => (
+                  <div key={idx} className={cn(
+                    'rounded-lg border p-3 flex items-center justify-between',
+                    result.imported ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-[#1e293b] bg-[#111827]'
+                  )}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white truncate">{result.subject}</p>
+                      <p className="text-xs text-slate-500">发件人: {result.from} | {result.date}</p>
+                      <p className="text-xs text-slate-500">附件: {result.attachments.join(', ')}</p>
+                    </div>
+                    <span className={cn(
+                      'text-xs px-2 py-0.5 rounded-full',
+                      result.imported ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-500/10 text-slate-400'
+                    )}>
+                      {result.imported ? '已导入' : '待导入'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tasks Tab */}
+      {activeTab === 'tasks' && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-slate-300">采集任务管理</h2>
+            <button
+              onClick={loadTasks}
+              className="flex items-center gap-1.5 rounded-lg bg-[#1a2236] px-3 py-1.5 text-xs text-slate-300 hover:bg-[#243049] cursor-pointer transition-colors"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              刷新
+            </button>
+          </div>
+
+          {loadingTasks ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-sky-400" />
+            </div>
+          ) : tasks.length === 0 ? (
+            <div className="rounded-xl border border-[#1e293b] bg-[#111827] p-8 text-center">
+              <FileText className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+              <p className="text-sm text-slate-400 mb-1">暂无采集任务</p>
+              <p className="text-xs text-slate-500">通过渠道采集或邮箱导入创建的任务会显示在这里</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {tasks.map(task => (
+                <div key={task.id} className="rounded-xl border border-[#1e293b] bg-[#111827] p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'flex h-8 w-8 items-center justify-center rounded-lg',
+                        task.status === 'running' ? 'bg-sky-500/10' :
+                        task.status === 'paused' ? 'bg-amber-500/10' :
+                        task.status === 'completed' ? 'bg-emerald-500/10' : 'bg-red-500/10'
+                      )}>
+                        {task.status === 'running' ? <Play className="h-4 w-4 text-sky-400" /> :
+                         task.status === 'paused' ? <Pause className="h-4 w-4 text-amber-400" /> :
+                         task.status === 'completed' ? <Check className="h-4 w-4 text-emerald-400" /> :
+                         <AlertTriangle className="h-4 w-4 text-red-400" />}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-white">{task.name}</p>
+                        <p className="text-xs text-slate-500">来源: {task.source} | 开始: {task.startedAt}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {task.status === 'running' && (
+                        <button
+                          onClick={async () => {
+                            await fetch('/api/collection/tasks', {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ taskId: task.id, status: 'paused' }),
+                            });
+                            loadTasks();
+                          }}
+                          className="flex items-center gap-1 rounded-lg bg-amber-500/10 px-2.5 py-1 text-xs text-amber-400 hover:bg-amber-500/20 cursor-pointer"
+                        >
+                          <Pause className="h-3 w-3" /> 暂停
+                        </button>
+                      )}
+                      {task.status === 'paused' && (
+                        <button
+                          onClick={async () => {
+                            await fetch('/api/collection/tasks', {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ taskId: task.id, status: 'running' }),
+                            });
+                            loadTasks();
+                          }}
+                          className="flex items-center gap-1 rounded-lg bg-sky-500/10 px-2.5 py-1 text-xs text-sky-400 hover:bg-sky-500/20 cursor-pointer"
+                        >
+                          <Play className="h-3 w-3" /> 恢复
+                        </button>
+                      )}
+                      {(task.status === 'running' || task.status === 'paused') && (
+                        <button
+                          onClick={async () => {
+                            await fetch('/api/collection/tasks', {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ taskId: task.id, status: 'failed' }),
+                            });
+                            loadTasks();
+                          }}
+                          className="flex items-center gap-1 rounded-lg bg-red-500/10 px-2.5 py-1 text-xs text-red-400 hover:bg-red-500/20 cursor-pointer"
+                        >
+                          <StopCircle className="h-3 w-3" /> 取消
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-slate-500">
+                    <span>进度: {task.collected}/{task.total}</span>
+                    <span>耗时: {task.duration}</span>
+                    <div className="flex-1 h-1.5 bg-[#1e293b] rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-sky-500 to-cyan-400 rounded-full transition-all"
+                        style={{ width: `${task.total > 0 ? (task.collected / task.total) * 100 : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Collection Results */}
       {collectedCandidates.length > 0 && (
@@ -786,6 +1128,83 @@ export default function CollectionPage() {
           >
             确定
           </button>
+        </div>
+      </Modal>
+
+      {/* Add Email Config Modal */}
+      <Modal isOpen={showAddEmailModal} onClose={() => setShowAddEmailModal(false)} title="添加邮箱配置">
+        <div className="space-y-4 py-2">
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">配置名称</label>
+            <input
+              type="text"
+              value={emailForm.name}
+              onChange={e => setEmailForm(prev => ({ ...prev, name: e.target.value }))}
+              placeholder="如：公司招聘邮箱"
+              className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-white placeholder:text-slate-600 focus:border-sky-500 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">邮箱地址 *</label>
+            <input
+              type="email"
+              value={emailForm.email}
+              onChange={e => setEmailForm(prev => ({ ...prev, email: e.target.value }))}
+              placeholder="recruit@company.com"
+              className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-white placeholder:text-slate-600 focus:border-sky-500 focus:outline-none"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1.5">IMAP服务器</label>
+              <input
+                type="text"
+                value={emailForm.imapServer}
+                onChange={e => setEmailForm(prev => ({ ...prev, imapServer: e.target.value }))}
+                placeholder="imap.qq.com"
+                className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-white placeholder:text-slate-600 focus:border-sky-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1.5">端口</label>
+              <input
+                type="text"
+                value={emailForm.imapPort}
+                onChange={e => setEmailForm(prev => ({ ...prev, imapPort: e.target.value }))}
+                placeholder="993"
+                className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-white placeholder:text-slate-600 focus:border-sky-500 focus:outline-none"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">授权码/密码 *</label>
+            <input
+              type="password"
+              value={emailForm.authCode}
+              onChange={e => setEmailForm(prev => ({ ...prev, authCode: e.target.value }))}
+              placeholder="邮箱授权码"
+              className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-white placeholder:text-slate-600 focus:border-sky-500 focus:outline-none"
+            />
+          </div>
+          <div className="rounded-lg bg-amber-500/5 border border-amber-500/20 p-3">
+            <p className="text-xs text-amber-400">
+              提示：QQ邮箱、网易邮箱需要在设置中开启IMAP服务并生成授权码；企业邮箱请使用企业提供的IMAP地址。
+            </p>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={() => setShowAddEmailModal(false)}
+              className="flex-1 h-9 rounded-lg border border-[#1e293b] text-sm text-slate-400 hover:bg-[#111827] transition-colors"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleAddEmailConfig}
+              className="flex-1 h-9 rounded-lg bg-sky-500 text-sm font-medium text-white hover:bg-sky-600 transition-colors"
+            >
+              保存
+            </button>
+          </div>
         </div>
       </Modal>
     </div>
