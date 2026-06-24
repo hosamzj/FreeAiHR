@@ -14,6 +14,8 @@ interface Contract {
   startDate: string;
   endDate: string;
   status: string;
+  source?: 'recruitment' | 'manual';
+  candidateId?: string;
   renewInitiatedBy?: string;
   renewApprovedBy?: string;
   renewExecutedBy?: string;
@@ -326,7 +328,14 @@ export default function ContractsPage() {
                           <FileSignature className="h-5 w-5 text-sky-400" />
                         </div>
                         <div>
-                          <p className="font-medium text-white">{contract.employeeName}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-white">{contract.employeeName}</p>
+                            {contract.source === 'recruitment' && (
+                              <span className="rounded-full bg-green-500/10 px-1.5 py-0.5 text-[10px] text-green-400">
+                                招聘转入
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-slate-400">
                             {contract.department} · {contract.position} · {contract.contractType === 'regular' ? '正式' : contract.contractType === 'fixed_term' ? '固定期限' : '实习'}
                           </p>

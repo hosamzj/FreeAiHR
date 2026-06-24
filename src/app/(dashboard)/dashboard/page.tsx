@@ -37,6 +37,13 @@ interface DashboardStats {
   scheduledInterviews: number;
 }
 
+interface WorkflowOverview {
+  recruiting: number;
+  pendingContract: number;
+  onboarding: number;
+  completedThisMonth: number;
+}
+
 export default function DashboardPage() {
   const { setActiveModule } = useAppContext();
   const router = useRouter();
@@ -46,6 +53,12 @@ export default function DashboardPage() {
     pendingOffer: 0,
     hired: 0,
     scheduledInterviews: 0,
+  });
+  const [workflowOverview, setWorkflowOverview] = useState<WorkflowOverview>({
+    recruiting: 0,
+    pendingContract: 0,
+    onboarding: 0,
+    completedThisMonth: 0,
   });
 
   useEffect(() => {
@@ -78,6 +91,17 @@ export default function DashboardPage() {
             scheduledInterviews: interviews.filter((i: { status: string }) => i.status === 'scheduled').length,
           }));
         }
+
+        // Fetch workflow overview
+        try {
+          const workflowRes = await fetch('/api/dashboard/workflow-overview');
+          if (workflowRes.ok) {
+            const workflowData = await workflowRes.json();
+            setWorkflowOverview(workflowData.data || { recruiting: 0, pendingContract: 0, onboarding: 0, completedThisMonth: 0 });
+          }
+        } catch (err) {
+          console.error('Failed to fetch workflow overview:', err);
+        }
       } catch (err) {
         console.error('Failed to fetch dashboard stats:', err);
       }
@@ -98,6 +122,71 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-4 md:space-y-5">
+      {/* Workflow Overview */}
+      <div className="rounded-xl border border-[#1e293b] bg-gradient-to-r from-[#111827] to-[#1a2236] p-4 md:p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-white md:text-base">全链路概览</h3>
+            <p className="mt-0.5 text-[11px] text-slate-500 md:text-xs">招聘 → 合同 → 入职 全流程追踪</p>
+          </div>
+          <div className="flex items-center gap-1.5 rounded-full bg-sky-500/10 px-2 py-1 md:px-2.5">
+            <TrendingUp className="h-3 w-3 text-sky-400" />
+            <span className="text-[10px] md:text-[11px] text-sky-400">实时</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+          <div 
+            className="rounded-lg border border-sky-500/20 bg-sky-500/5 p-3 cursor-pointer hover:bg-sky-500/10 transition-colors"
+            onClick={() => router.push('/resumes')}
+          >
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg bg-sky-500/10 p-1.5">
+                <Users className="h-4 w-4 text-sky-400" />
+              </div>
+              <span className="text-xs text-slate-400">招聘中</span>
+            </div>
+            <p className="mt-2 font-mono text-2xl font-bold text-white">{workflowOverview.recruiting}</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">人</p>
+          </div>
+          <div 
+            className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 cursor-pointer hover:bg-amber-500/10 transition-colors"
+            onClick={() => router.push('/contracts')}
+          >
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg bg-amber-500/10 p-1.5">
+                <FileCheck className="h-4 w-4 text-amber-400" />
+              </div>
+              <span className="text-xs text-slate-400">待签合同</span>
+            </div>
+            <p className="mt-2 font-mono text-2xl font-bold text-white">{workflowOverview.pendingContract}</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">人</p>
+          </div>
+          <div 
+            className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3 cursor-pointer hover:bg-purple-500/10 transition-colors"
+            onClick={() => router.push('/onboarding')}
+          >
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg bg-purple-500/10 p-1.5">
+                <UserCheck className="h-4 w-4 text-purple-400" />
+              </div>
+              <span className="text-xs text-slate-400">入职办理中</span>
+            </div>
+            <p className="mt-2 font-mono text-2xl font-bold text-white">{workflowOverview.onboarding}</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">人</p>
+          </div>
+          <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-3">
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg bg-green-500/10 p-1.5">
+                <Calendar className="h-4 w-4 text-green-400" />
+              </div>
+              <span className="text-xs text-slate-400">本月已完成</span>
+            </div>
+            <p className="mt-2 font-mono text-2xl font-bold text-white">{workflowOverview.completedThisMonth}</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">人</p>
+          </div>
+        </div>
+      </div>
+
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-2.5 md:gap-3 lg:grid-cols-3 xl:grid-cols-6">
         {dashboardStats.map((stat) => {

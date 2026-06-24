@@ -27,6 +27,8 @@ import {
   AlertTriangle,
   SkipForward,
   Copy,
+  GitBranch,
+  CheckCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { mockCandidates, mockParsedResume } from '@/lib/mock-data';
@@ -418,17 +420,36 @@ export default function ResumesPage() {
     }
   }, [selectedCandidate, candidates]);
 
-  // 接受Offer → 状态变为"已入职"
+  // 接受Offer → 状态变为"已入职" → 自动创建合同
   const handleAcceptOffer = useCallback(async (candidateId: string, candidateName: string) => {
-    if (!confirm(`确认 ${candidateName} 已接受Offer并办理入职？`)) return;
+    if (!confirm(`确认 ${candidateName} 已接受Offer并办理入职？\n\n系统将自动创建合同记录。`)) return;
     setActionLoading(candidateId);
     try {
+      // 1. 更新候选人状态
       setCandidates(prev => prev.map(c =>
         c.id === candidateId ? { ...c, status: 'hired' as const } : c
       ));
-      await new Promise(resolve => setTimeout(resolve, 500));
-      alert(`${candidateName} 已入职！`);
+      
+      // 2. 调用后端API更新状态并自动创建合同
+      const res = await fetch(`/api/candidates/${candidateId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'hired' }),
+      });
+      
+      const data = await res.json();
+      
+      if (data.code === 0 && data.data?.contractCreated) {
+        // 合同创建成功，显示提示并提供跳转
+        const contractId = data.data.contractId;
+        if (confirm(`✅ ${candidateName} 已入职！\n\n已自动创建合同记录（编号：${contractId?.slice(-8) || 'N/A'}）。\n\n点击"确定"跳转到合同管理查看。`)) {
+          window.location.href = '/contracts';
+        }
+      } else {
+        alert(`${candidateName} 已入职！`);
+      }
     } catch (error) {
+      console.error('Accept offer error:', error);
       alert('操作失败，请重试');
     } finally {
       setActionLoading(null);
@@ -792,6 +813,41 @@ export default function ResumesPage() {
             {/* Expanded Details */}
             {expandedCandidate === candidate.id && (
               <div className="border-t border-[#1e293b] bg-[#0a0e1a]/50 p-3 md:p-4 space-y-3">
+                {/* 流程追踪区域 */}
+                <div className="rounded-lg border border-[#1e293b] bg-[#111827]/50 p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <GitBranch className="h-3.5 w-3.5 text-sky-400" />
+                    <p className="text-[11px] md:text-xs font-medium text-slate-300">流程追踪</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {candidate.status === 'hired' ? (
+                      <>
+                        <span className="flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] md:text-[11px] text-green-400">
+                          <CheckCircle className="h-3 w-3" /> 已完成入职
+                        </span>
+                        <a href="/contracts" className="text-[10px] md:text-[11px] text-sky-400 hover:underline">
+                          查看合同 →
+                        </a>
+                      </>
+                    ) : candidate.status === 'offer' ? (
+                      <span className="flex items-center gap-1 rounded-full bg-orange-500/10 px-2 py-0.5 text-[10px] md:text-[11px] text-orange-400">
+                        <FileText className="h-3 w-3" /> 待接受Offer
+                      </span>
+                    ) : candidate.status === 'interview' ? (
+                      <span className="flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] md:text-[11px] text-blue-400">
+                        <Calendar className="h-3 w-3" /> 面试中
+                      </span>
+                    ) : candidate.status === 'screening' ? (
+                      <span className="flex items-center gap-1 rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] md:text-[11px] text-purple-400">
+                        <Search className="h-3 w-3" /> 简历筛选中
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 rounded-full bg-slate-500/10 px-2 py-0.5 text-[10px] md:text-[11px] text-slate-400">
+                        <Clock className="h-3 w-3" /> 新简历
+                      </span>
+                    )}
+                  </div>
+                </div>
                 <div>
                   <p className="text-[11px] md:text-xs font-medium text-slate-400 mb-1">AI 评估摘要</p>
                   <p className="text-[11px] md:text-xs leading-relaxed text-slate-300">{candidate.aiSummary}</p>

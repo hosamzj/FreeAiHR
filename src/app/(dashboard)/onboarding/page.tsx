@@ -18,6 +18,8 @@ interface OnboardingTask {
 interface Onboarding {
   id: string;
   candidateId: string;
+  contractId?: string;
+  contractStatus?: string;
   employeeName: string;
   employeeId?: string;
   position?: string;
@@ -283,6 +285,11 @@ export default function OnboardingPage() {
                           <p className="text-xs text-slate-400">
                             {ob.department} · {ob.position} · 入职日期: {new Date(ob.startDate).toLocaleDateString()}
                           </p>
+                          {ob.contractId && (
+                            <p className="mt-1 text-xs text-slate-500">
+                              合同: {ob.contractStatus === 'completed' ? '已完成' : ob.contractStatus === 'pending_sign' ? '待签署' : ob.contractStatus === 'in_progress' ? '签核中' : ob.contractStatus || '未知'}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
