@@ -211,7 +211,8 @@ export default function CollectionPage() {
     try {
       const res = await fetch('/api/collection/tasks');
       const data = await res.json();
-      setTasks(data.data || []);
+      const taskList = data?.data?.tasks || data?.tasks || [];
+      setTasks(Array.isArray(taskList) ? taskList : []);
     } catch {
       setTasks([]);
     }
@@ -223,7 +224,8 @@ export default function CollectionPage() {
     try {
       const res = await fetch('/api/collection/email-config');
       const data = await res.json();
-      setEmailConfigs(data.data || []);
+      const configs = data?.data?.configs || data?.configs || [];
+      setEmailConfigs(Array.isArray(configs) ? configs : []);
     } catch {
       setEmailConfigs([]);
     }
@@ -510,7 +512,7 @@ export default function CollectionPage() {
           </div>
 
           {/* Email configs list */}
-          {emailConfigs.length === 0 ? (
+          {(emailConfigs || []).length === 0 ? (
             <div className="rounded-xl border border-[#1e293b] bg-[#111827] p-8 text-center">
               <Mail className="w-10 h-10 text-slate-600 mx-auto mb-3" />
               <p className="text-sm text-slate-400 mb-1">暂无邮箱配置</p>
@@ -518,7 +520,7 @@ export default function CollectionPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {emailConfigs.map(config => (
+              {(emailConfigs || []).map(config => (
                 <div key={config.id} className="rounded-xl border border-[#1e293b] bg-[#111827] p-4">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
@@ -618,7 +620,7 @@ export default function CollectionPage() {
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-sky-400" />
             </div>
-          ) : tasks.length === 0 ? (
+          ) : (tasks || []).length === 0 ? (
             <div className="rounded-xl border border-[#1e293b] bg-[#111827] p-8 text-center">
               <FileText className="w-10 h-10 text-slate-600 mx-auto mb-3" />
               <p className="text-sm text-slate-400 mb-1">暂无采集任务</p>
@@ -626,7 +628,7 @@ export default function CollectionPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {tasks.map(task => (
+              {(tasks || []).map(task => (
                 <div key={task.id} className="rounded-xl border border-[#1e293b] bg-[#111827] p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
