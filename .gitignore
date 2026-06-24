@@ -161,3 +161,4 @@ Desktop.ini
 .coze-logs
 
 /src/generated/prisma
+.codegraph
