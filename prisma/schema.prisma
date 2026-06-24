@@ -351,7 +351,10 @@ model Contract {
   contractType    String   @default("regular") // regular, fixed_term, intern
   startDate       DateTime
   endDate         DateTime
-  status          String   @default("active") // active, expiring, renewing, renewed, terminated
+  status          String   @default("pending_sign") // pending_sign, signing, completed, terminated
+  // 招聘关联
+  candidateId     String?  // 关联候选人（从招聘转入）
+  source          String   @default("recruitment") // recruitment, manual, renewal
   // 续签流程
   renewInitiatedBy String? // 发起续签的经理ID
   renewInitiatedAt DateTime?
@@ -377,10 +380,13 @@ model Onboarding {
   employeeName    String
   position        String?
   department      String?
+  employeeId      String?  // 工号
+  contractId      String?  // 关联合同
   managerId       String?  // 用人经理
   mentorId        String?  // 导师
   startDate       DateTime
-  status          String   @default("pending") // pending, in_progress, completed, cancelled
+  onboardingDate  DateTime? // 入职日期
+  status          String   @default("pending") // pending, notified, in_progress, completed, cancelled
   // 入职任务
   tasks           String   @default("[]") // JSON array of tasks
   // 进度追踪
@@ -388,6 +394,10 @@ model Onboarding {
   adminReady      Boolean  @default(false)
   trainingReady   Boolean  @default(false)
   teamReady       Boolean  @default(false)
+  itAccountReady  Boolean  @default(false)
+  equipmentReady  Boolean  @default(false)
+  trainingScheduled Boolean @default(false)
+  introductionDone Boolean @default(false)
   // 回访
   day7FollowUp    Boolean  @default(false)
   day7FollowUpAt  DateTime?

@@ -65,6 +65,11 @@ export async function PUT(request: NextRequest) {
 
     if (!id) return error(422, '合同ID不能为空');
 
+    // 获取原始合同信息以检测状态变更
+    const originalContract = await prisma.contract.findUnique({ where: { id } });
+    const wasNotCompleted = originalContract && originalContract.status !== 'completed';
+    const isNowCompleted = data.status === 'completed';
+
     const updateData: Record<string, unknown> = {};
     if (data.status) updateData.status = data.status;
     if (data.endDate) updateData.endDate = new Date(data.endDate);
@@ -74,6 +79,70 @@ export async function PUT(request: NextRequest) {
       where: { id },
       data: updateData,
     });
+
+    // 如果状态变为completed，自动触发入职流程
+    if (wasNotCompleted && isNowCompleted) {
+      try {
+        // 创建入职记录
+        const onboarding = await prisma.onboarding.create({
+          data: {
+            candidateId: contract.candidateId || `cand_${Date.now()}`,
+            employeeName: contract.employeeName,
+            position: contract.position,
+            department: contract.department,
+            employeeId: contract.employeeId,
+            onboardingDate: contract.startDate,
+            startDate: contract.startDate,
+            status: 'notified',
+            contractId: id,
+            itAccountReady: false,
+            equipmentReady: false,
+            trainingScheduled: false,
+            introductionDone: false,
+            day7FollowUp: false,
+            day30FollowUp: false,
+          },
+        });
+
+        // 创建默认入职任务
+        const tasks = [
+          { title: '开通账号', assigneeName: 'IT', category: 'it', dueDate: contract.startDate },
+          { title: '配置设备', assigneeName: 'IT', category: 'it', dueDate: contract.startDate },
+          { title: '工位安排', assigneeName: '行政', category: 'admin', dueDate: contract.startDate },
+          { title: '门禁卡', assigneeName: '行政', category: 'admin', dueDate: contract.startDate },
+          { title: '入职培训', assigneeName: '培训', category: 'training', dueDate: new Date(contract.startDate.getTime() + 3 * 24 * 60 * 60 * 1000) },
+          { title: '部门接待', assigneeName: '用人部门', category: 'team', dueDate: contract.startDate },
+        ];
+
+        for (const task of tasks) {
+          await prisma.onboardingTask.create({
+            data: {
+              onboardingId: onboarding.id,
+              title: task.title,
+              assigneeName: task.assigneeName,
+              category: task.category,
+              dueDate: task.dueDate,
+              status: 'pending',
+            },
+          });
+        }
+
+        // 创建通知记录
+        await prisma.onboardingNotification.create({
+          data: {
+            onboardingId: onboarding.id,
+            notificationType: 'completion_notice',
+            recipientType: 'manager',
+            recipientEmail: 'manager@company.com',
+            content: `新员工 ${contract.employeeName} 已完成入职办理，请安排部门接待。`,
+            status: 'sent',
+          },
+        });
+      } catch (onboardingErr) {
+        console.error('Auto initiate onboarding error:', onboardingErr);
+        // 不阻断主流程，记录错误即可
+      }
+    }
 
     return success(contract);
   } catch (e) {

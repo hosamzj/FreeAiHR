@@ -56,10 +56,43 @@ export async function PUT(
       }
     }
 
+    // 获取原始候选人信息以检测状态变更
+    const originalCandidate = await prisma.candidate.findUnique({ where: { id } });
+    const wasNotHired = originalCandidate && originalCandidate.status !== 'hired';
+    const isNowHired = updateData.status === 'hired';
+
     const candidate = await prisma.candidate.update({
       where: { id },
       data: updateData,
     });
+
+    // 如果状态变为hired，自动创建合同
+    if (wasNotHired && isNowHired) {
+      try {
+        const employeeId = `EMP${Date.now().toString().slice(-6)}`;
+        const startDate = new Date();
+        const endDate = new Date();
+        endDate.setFullYear(endDate.getFullYear() + 1); // 默认1年合同
+
+        await prisma.contract.create({
+          data: {
+            employeeId,
+            employeeName: candidate.name,
+            department: candidate.department || '',
+            position: candidate.appliedPosition || '',
+            contractType: 'regular',
+            startDate,
+            endDate,
+            status: 'pending_sign',
+            candidateId: id,
+            source: 'recruitment',
+          },
+        });
+      } catch (contractErr) {
+        console.error('Auto create contract error:', contractErr);
+        // 不阻断主流程，记录错误即可
+      }
+    }
 
     return success(candidate);
   } catch (err) {
