@@ -139,17 +139,39 @@ export default function ContractsPage() {
     }
   }, []);
 
-  const openOutlookCompose = () => {
+  const openOutlookCompose = async () => {
     if (!emailPreview) return;
-    const params = new URLSearchParams({
-      to: emailPreview.to,
-      cc: emailPreview.cc,
-      subject: emailPreview.subject,
-      body: emailPreview.body,
-    });
-    // Outlook Web deep link
-    const url = `https://outlook.office.com/mail/deeplink/compose?${params.toString()}`;
-    window.open(url, '_blank');
+    const to = emailPreview.to;
+    const cc = emailPreview.cc;
+    const subject = emailPreview.subject;
+    // Strip HTML tags for plain text body
+    const plainBody = emailPreview.body.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+    
+    const MAX_BODY_LENGTH = 1800;
+    
+    if (plainBody.length <= MAX_BODY_LENGTH) {
+      // Short body - use full mailto
+      const mailto = `mailto:${to}?cc=${encodeURIComponent(cc)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(plainBody)}`;
+      window.location.href = mailto;
+    } else {
+      // Long body - put summary in mailto, copy full content to clipboard
+      const summary = plainBody.substring(0, MAX_BODY_LENGTH) + '\n\n[完整内容已复制到剪贴板，请在正文中Ctrl+V粘贴]';
+      const mailto = `mailto:${to}?cc=${encodeURIComponent(cc)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(summary)}`;
+      
+      try {
+        await navigator.clipboard.writeText(plainBody);
+        window.location.href = mailto;
+      } catch {
+        // Fallback: create textarea to copy
+        const textarea = document.createElement('textarea');
+        textarea.value = plainBody;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        window.location.href = mailto;
+      }
+    }
   };
 
   const confirmEmailSent = async () => {
@@ -866,7 +888,7 @@ export default function ContractsPage() {
                 className="flex items-center gap-2 rounded-lg bg-sky-500 px-4 py-2 text-sm font-medium text-white hover:bg-sky-600"
               >
                 <Mail className="h-4 w-4" />
-                通过 Outlook 发送
+                通过Outlook发送
               </button>
               <button
                 onClick={confirmEmailSent}
