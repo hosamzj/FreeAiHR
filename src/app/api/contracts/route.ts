@@ -73,7 +73,8 @@ export async function POST(request: NextRequest) {
     return success(contract);
   } catch (e) {
     console.error('Create contract error:', e);
-    return error(500, '创建合同失败');
+    const errorMessage = e instanceof Error ? e.message : '未知错误';
+    return error(500, `创建合同失败: ${errorMessage}`);
   }
 }
 
