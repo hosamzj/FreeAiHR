@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type TabId = 'sso' | 'password' | 'general' | 'collection' | 'interview_methods' | 'ai';
+type TabId = 'sso' | 'password' | 'general' | 'collection' | 'interview_methods' | 'ai' | 'email_templates';
 
 interface SSOCfg {
   enabled: boolean;
@@ -109,6 +109,24 @@ export default function SettingsPage() {
   const [testingAI, setTestingAI] = useState(false);
   const [aiTestResult, setAiTestResult] = useState<'success' | 'error' | null>(null);
 
+  // Email templates state
+  interface EmailTemplateItem {
+    id: string;
+    name: string;
+    displayName: string;
+    category: string;
+    subject: string;
+    body: string;
+    variables: string;
+    enabled: boolean;
+  }
+  const [emailTemplates, setEmailTemplates] = useState<EmailTemplateItem[]>([]);
+  const [editingTemplate, setEditingTemplate] = useState<EmailTemplateItem | null>(null);
+  const [showTemplateEditor, setShowTemplateEditor] = useState(false);
+  const [templateForm, setTemplateForm] = useState({ subject: '', body: '' });
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [seedingTemplates, setSeedingTemplates] = useState(false);
+
   useEffect(() => {
     if (user?.role !== 'admin') return;
     fetch('/api/system/sso').then(r => r.json()).then(d => { if (d.code === 0) setSso(d.data); });
@@ -118,6 +136,8 @@ export default function SettingsPage() {
     fetchInterviewMethods();
     // Fetch AI config
     fetchAIConfig();
+    // Fetch email templates
+    fetchEmailTemplates();
     // Collection config is stored locally for now
   }, [user]);
 
@@ -256,6 +276,82 @@ export default function SettingsPage() {
     }
   };
 
+  // Email template functions
+  const fetchEmailTemplates = async () => {
+    setLoadingTemplates(true);
+    try {
+      const res = await fetch('/api/email-templates');
+      const data = await res.json();
+      if (data.code === 0) {
+        setEmailTemplates(data.data || []);
+      }
+    } catch (e) {
+      console.error('Fetch email templates error:', e);
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+
+  const handleSeedTemplates = async () => {
+    setSeedingTemplates(true);
+    try {
+      const res = await fetch('/api/email-templates/seed', { method: 'POST' });
+      const data = await res.json();
+      if (data.code === 0) {
+        fetchEmailTemplates();
+      }
+    } catch (e) {
+      console.error('Seed templates error:', e);
+    } finally {
+      setSeedingTemplates(false);
+    }
+  };
+
+  const handleEditTemplate = (tpl: EmailTemplateItem) => {
+    setEditingTemplate(tpl);
+    setTemplateForm({ subject: tpl.subject, body: tpl.body });
+    setShowTemplateEditor(true);
+  };
+
+  const handleSaveTemplate = async () => {
+    if (!editingTemplate) return;
+    try {
+      const res = await fetch('/api/email-templates', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingTemplate.id,
+          subject: templateForm.subject,
+          body: templateForm.body,
+        }),
+      });
+      const data = await res.json();
+      if (data.code === 0) {
+        setShowTemplateEditor(false);
+        setEditingTemplate(null);
+        fetchEmailTemplates();
+      }
+    } catch (e) {
+      console.error('Save template error:', e);
+    }
+  };
+
+  const handleToggleTemplate = async (tpl: EmailTemplateItem) => {
+    try {
+      const res = await fetch('/api/email-templates', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: tpl.id, enabled: !tpl.enabled }),
+      });
+      const data = await res.json();
+      if (data.code === 0) {
+        fetchEmailTemplates();
+      }
+    } catch (e) {
+      console.error('Toggle template error:', e);
+    }
+  };
+
   if (user?.role !== 'admin') {
     return (
       <div className="flex items-center justify-center h-64">
@@ -271,6 +367,7 @@ export default function SettingsPage() {
     { id: 'collection' as TabId, label: '采集配置', icon: Download },
     { id: 'interview_methods' as TabId, label: '面试方式', icon: Video },
     { id: 'ai' as TabId, label: 'AI配置', icon: Bot },
+    { id: 'email_templates' as TabId, label: '邮件模板', icon: Mail },
   ];
 
   return (
@@ -863,6 +960,157 @@ export default function SettingsPage() {
                   <p className="text-xs text-slate-400 mt-1">{feature.desc}</p>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Email Templates */}
+      {activeTab === 'email_templates' && (
+        <div className="space-y-6">
+          <div className="bg-[#111827] border border-slate-800 rounded-xl p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-medium text-white flex items-center gap-2">
+                  <Mail className="w-5 h-5 text-sky-400" />
+                  邮件模板管理
+                </h3>
+                <p className="text-sm text-slate-400 mt-1">管理系统中各类通知邮件的模板，支持变量替换</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSeedTemplates}
+                  disabled={seedingTemplates}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {seedingTemplates ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  初始化默认模板
+                </button>
+              </div>
+            </div>
+
+            {loadingTemplates ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-sky-400" />
+              </div>
+            ) : emailTemplates.length === 0 ? (
+              <div className="text-center py-8 text-slate-400">
+                <Mail className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <p>暂无邮件模板</p>
+                <p className="text-xs mt-1">点击"初始化默认模板"创建系统默认模板</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {emailTemplates.map((tpl) => (
+                  <div key={tpl.id} className="p-4 bg-[#0a0e1a] border border-slate-700 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-medium text-white">{tpl.displayName}</h4>
+                          <span className="text-xs px-2 py-0.5 rounded bg-slate-700 text-slate-300">{tpl.category}</span>
+                          <span className={cn(
+                            'text-xs px-2 py-0.5 rounded',
+                            tpl.enabled ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
+                          )}>
+                            {tpl.enabled ? '已启用' : '已禁用'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1 font-mono">{tpl.name}</p>
+                        <p className="text-xs text-slate-500 mt-1 truncate">主题：{tpl.subject}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleToggleTemplate(tpl)}
+                          className={cn(
+                            'px-3 py-1.5 text-xs rounded-lg transition-colors',
+                            tpl.enabled
+                              ? 'bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20'
+                              : 'bg-green-500/10 text-green-400 hover:bg-green-500/20'
+                          )}
+                        >
+                          {tpl.enabled ? '禁用' : '启用'}
+                        </button>
+                        <button
+                          onClick={() => handleEditTemplate(tpl)}
+                          className="px-3 py-1.5 text-xs bg-sky-500/10 text-sky-400 rounded-lg hover:bg-sky-500/20 transition-colors"
+                        >
+                          编辑
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Variable Reference */}
+          <div className="bg-[#111827] border border-slate-800 rounded-xl p-6 space-y-4">
+            <h4 className="text-sm font-medium text-white">可用变量说明</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                { var: '{{employeeName}}', desc: '员工姓名' },
+                { var: '{{employeeId}}', desc: '员工工号' },
+                { var: '{{department}}', desc: '部门名称' },
+                { var: '{{position}}', desc: '职位名称' },
+                { var: '{{contractEndDate}}', desc: '合同到期日' },
+                { var: '{{daysLeft}}', desc: '剩余天数' },
+                { var: '{{dueDate}}', desc: '截止日期' },
+                { var: '{{managerName}}', desc: '经理姓名' },
+                { var: '{{onboardingDate}}', desc: '入职日期' },
+              ].map((item) => (
+                <div key={item.var} className="p-2 bg-[#0a0e1a] border border-slate-700 rounded-lg flex items-center gap-2">
+                  <code className="text-xs text-sky-400">{item.var}</code>
+                  <span className="text-xs text-slate-400">- {item.desc}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Template Editor Modal */}
+      {showTemplateEditor && editingTemplate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowTemplateEditor(false)}>
+          <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-[#111827] border border-slate-700 rounded-xl p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-white">编辑模板：{editingTemplate.displayName}</h3>
+              <button onClick={() => setShowTemplateEditor(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">邮件主题</label>
+                <input
+                  value={templateForm.subject}
+                  onChange={(e) => setTemplateForm({ ...templateForm, subject: e.target.value })}
+                  className="w-full px-3 py-2 bg-[#0a0e1a] border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">邮件正文（HTML）</label>
+                <textarea
+                  value={templateForm.body}
+                  onChange={(e) => setTemplateForm({ ...templateForm, body: e.target.value })}
+                  rows={16}
+                  className="w-full px-3 py-2 bg-[#0a0e1a] border border-slate-700 rounded-lg text-sm text-white font-mono focus:outline-none focus:border-sky-500 resize-none"
+                />
+              </div>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowTemplateEditor(false)}
+                  className="px-4 py-2 text-sm text-slate-400 hover:text-white"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleSaveTemplate}
+                  className="px-4 py-2 bg-sky-500 hover:bg-sky-400 text-white text-sm rounded-lg"
+                >
+                  保存
+                </button>
+              </div>
             </div>
           </div>
         </div>

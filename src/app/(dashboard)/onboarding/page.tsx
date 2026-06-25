@@ -64,7 +64,7 @@ export default function OnboardingPage() {
   const [dailySummary, setDailySummary] = useState<DailySummary | null>(null);
   const [notificationRules, setNotificationRules] = useState<NotificationRule[]>([]);
   const [showEmailPreview, setShowEmailPreview] = useState(false);
-  const [emailContent, setEmailContent] = useState('');
+  const [emailPreview, setEmailPreview] = useState<{ to: string; cc: string; subject: string; body: string } | null>(null);
   const [timeline, setTimeline] = useState<{ time: string; action: string; user: string }[]>([]);
   const [eligibleEmployees, setEligibleEmployees] = useState<{ id: string; name: string; department: string | null; position: string | null; startDate: Date | null; email: string | null; phone: string | null }[]>([]);
 
@@ -180,10 +180,44 @@ export default function OnboardingPage() {
     try {
       const res = await fetch(`/api/onboarding/${onboardingId}/preview-email`);
       const data = await res.json();
-      setEmailContent(data.data?.email || '');
+      setEmailPreview(data.data || null);
       setShowEmailPreview(true);
     } catch (e) {
       console.error('Preview email error:', e);
+    }
+  };
+
+  const openOutlookCompose = () => {
+    if (!emailPreview) return;
+    const params = new URLSearchParams({
+      to: emailPreview.to,
+      cc: emailPreview.cc,
+      subject: emailPreview.subject,
+      body: emailPreview.body,
+    });
+    const url = `https://outlook.office.com/mail/deeplink/compose?${params.toString()}`;
+    window.open(url, '_blank');
+  };
+
+  const confirmEmailSent = async () => {
+    if (!selectedOnboarding) return;
+    try {
+      // 更新入职状态为 notified（已通知）
+      const res = await fetch(`/api/onboarding/initiate`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedOnboarding.id,
+          status: 'notified',
+        }),
+      });
+      const data = await res.json();
+      if (data.code === 0) {
+        setShowEmailPreview(false);
+        loadDashboard();
+      }
+    } catch (e) {
+      console.error('Confirm email sent error:', e);
     }
   };
 
@@ -557,16 +591,55 @@ export default function OnboardingPage() {
 
       {/* Email Preview Modal */}
       <Modal isOpen={showEmailPreview} onClose={() => setShowEmailPreview(false)} title="邮件预览">
-        <div className="space-y-4">
-          <div className="rounded-lg bg-[#0a0e1a] p-4">
-            <pre className="whitespace-pre-wrap text-sm text-slate-300">{emailContent}</pre>
+        {emailPreview ? (
+          <div className="space-y-4">
+            <div className="rounded-lg bg-[#0a0e1a] p-4">
+              <div className="space-y-2 text-sm">
+                <div>
+                  <span className="text-slate-500">收件人：</span>
+                  <span className="text-white">{emailPreview.to}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">抄送：</span>
+                  <span className="text-white">{emailPreview.cc}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">主题：</span>
+                  <span className="font-medium text-white">{emailPreview.subject}</span>
+                </div>
+              </div>
+            </div>
+            <div className="max-h-96 overflow-y-auto rounded-lg bg-white p-4">
+              <div
+                className="prose prose-sm max-w-none text-slate-800"
+                dangerouslySetInnerHTML={{ __html: emailPreview.body }}
+              />
+            </div>
+            <div className="rounded-lg bg-yellow-500/10 p-3">
+              <p className="text-xs text-yellow-400">
+                说明：本通知由AI辅助生成，入职状态以HRS系统记录为准。
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={openOutlookCompose}
+                className="flex items-center gap-2 rounded-lg bg-sky-500 px-4 py-2 text-sm font-medium text-white hover:bg-sky-600"
+              >
+                <Mail className="h-4 w-4" />
+                通过 Outlook 发送
+              </button>
+              <button
+                onClick={confirmEmailSent}
+                className="flex items-center gap-2 rounded-lg bg-green-500/10 px-4 py-2 text-sm font-medium text-green-400 hover:bg-green-500/20"
+              >
+                <CheckCircle className="h-4 w-4" />
+                确认已发送
+              </button>
+            </div>
           </div>
-          <div className="rounded-lg bg-yellow-500/10 p-3">
-            <p className="text-xs text-yellow-400">
-              说明：本通知由AI辅助生成，入职状态以HRS系统记录为准。
-            </p>
-          </div>
-        </div>
+        ) : (
+          <div className="py-8 text-center text-slate-400">加载中...</div>
+        )}
       </Modal>
     </div>
   );

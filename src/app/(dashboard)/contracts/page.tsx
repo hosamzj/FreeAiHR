@@ -139,6 +139,41 @@ export default function ContractsPage() {
     }
   }, []);
 
+  const openOutlookCompose = () => {
+    if (!emailPreview) return;
+    const params = new URLSearchParams({
+      to: emailPreview.to,
+      cc: emailPreview.cc,
+      subject: emailPreview.subject,
+      body: emailPreview.body,
+    });
+    // Outlook Web deep link
+    const url = `https://outlook.office.com/mail/deeplink/compose?${params.toString()}`;
+    window.open(url, '_blank');
+  };
+
+  const confirmEmailSent = async () => {
+    if (!selectedContract) return;
+    try {
+      // 如果合同状态是pending_sign，先改为signing（开始签署）
+      const res = await fetch('/api/contracts', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedContract.id,
+          status: selectedContract.status === 'pending_sign' ? 'signing' : selectedContract.status,
+        }),
+      });
+      const data = await res.json();
+      if (data.code === 0) {
+        setShowEmailModal(false);
+        loadContracts();
+      }
+    } catch (e) {
+      console.error('Confirm email sent error:', e);
+    }
+  };
+
   const loadEligibleEmployees = useCallback(async () => {
     try {
       const res = await fetch('/api/contracts/eligible-employees');
@@ -814,13 +849,32 @@ export default function ContractsPage() {
                 </div>
               </div>
             </div>
-            <div className="max-h-96 overflow-y-auto rounded-lg bg-[#0a0e1a] p-4">
-              <pre className="whitespace-pre-wrap font-sans text-sm text-slate-300">{emailPreview.body}</pre>
+            <div className="max-h-96 overflow-y-auto rounded-lg bg-white p-4">
+              <div
+                className="prose prose-sm max-w-none text-slate-800"
+                dangerouslySetInnerHTML={{ __html: emailPreview.body }}
+              />
             </div>
             <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3">
               <p className="text-xs text-purple-400">
                 说明：本邮件由 AI 辅助生成，具体续签决定需由业务经理与 HRBP/RP 按公司流程人工确认。
               </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={openOutlookCompose}
+                className="flex items-center gap-2 rounded-lg bg-sky-500 px-4 py-2 text-sm font-medium text-white hover:bg-sky-600"
+              >
+                <Mail className="h-4 w-4" />
+                通过 Outlook 发送
+              </button>
+              <button
+                onClick={confirmEmailSent}
+                className="flex items-center gap-2 rounded-lg bg-green-500/10 px-4 py-2 text-sm font-medium text-green-400 hover:bg-green-500/20"
+              >
+                <CheckCircle className="h-4 w-4" />
+                确认已发送
+              </button>
             </div>
           </div>
         )}

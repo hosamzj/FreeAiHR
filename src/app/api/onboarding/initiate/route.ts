@@ -56,3 +56,26 @@ export async function POST(request: NextRequest) {
     return error(500, '发起入职流程失败');
   }
 }
+
+// PUT /api/onboarding/initiate - 更新入职状态
+export async function PUT(request: NextRequest) {
+  try {
+    await requireAuth();
+    const body = await request.json();
+    const { id, status } = body;
+
+    if (!id || !status) {
+      return error(422, '缺少必要字段');
+    }
+
+    const onboarding = await prisma.onboarding.update({
+      where: { id },
+      data: { status },
+    });
+
+    return success(onboarding);
+  } catch (e) {
+    console.error('Update onboarding error:', e);
+    return error(500, '更新入职状态失败');
+  }
+}
