@@ -238,22 +238,38 @@ export default function OnboardingPage() {
   const confirmEmailSent = async () => {
     if (!selectedOnboarding) return;
     try {
-      // 更新入职状态为 notified（已通知）
+      // 状态流转逻辑：pending -> notified -> in_progress
+      let nextStatus: string;
+      if (selectedOnboarding.status === 'pending') {
+        nextStatus = 'notified';
+      } else if (selectedOnboarding.status === 'notified') {
+        nextStatus = 'in_progress';
+      } else {
+        nextStatus = selectedOnboarding.status;
+      }
+
       const res = await fetch(`/api/onboarding/initiate`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: selectedOnboarding.id,
-          status: 'notified',
+          status: nextStatus,
         }),
       });
       const data = await res.json();
       if (data.code === 0) {
         setShowEmailPreview(false);
+        setSelectedOnboarding(null);
+        setEmailPreview(null);
         loadDashboard();
+        const statusLabels: Record<string, string> = { pending: '待通知', notified: '已通知', in_progress: '接待中', training: '培训中', completed: '已完成' };
+        alert(`邮件已确认发送，入职状态已更新为"${statusLabels[nextStatus] || nextStatus}"`);
+      } else {
+        alert(`状态更新失败: ${data.message || '未知错误'}`);
       }
     } catch (e) {
       console.error('Confirm email sent error:', e);
+      alert('确认发送失败，请重试');
     }
   };
 
@@ -270,9 +286,31 @@ export default function OnboardingPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'text-yellow-400 bg-yellow-500/10';
+      case 'notified': return 'text-purple-400 bg-purple-500/10';
       case 'in_progress': return 'text-sky-400 bg-sky-500/10';
+      case 'training': return 'text-orange-400 bg-orange-500/10';
       case 'completed': return 'text-green-400 bg-green-500/10';
       default: return 'text-slate-400 bg-slate-500/10';
+    }
+  };
+
+  // 入职流程步骤
+  const onboardingSteps = [
+    { key: 'pending', label: '待通知' },
+    { key: 'notified', label: '已通知' },
+    { key: 'in_progress', label: '接待中' },
+    { key: 'training', label: '培训中' },
+    { key: 'completed', label: '已完成' },
+  ];
+
+  const getOnboardingStepIndex = (status: string) => {
+    switch (status) {
+      case 'pending': return 0;
+      case 'notified': return 1;
+      case 'in_progress': return 2;
+      case 'training': return 3;
+      case 'completed': return 4;
+      default: return 0;
     }
   };
 
@@ -399,7 +437,7 @@ export default function OnboardingPage() {
                           </p>
                         </div>
                         <span className={`rounded-full px-2 py-1 text-xs ${getStatusColor(ob.status)}`}>
-                          {ob.status === 'pending' ? '待入职' : ob.status === 'in_progress' ? '入职中' : ob.status === 'completed' ? '已完成' : ob.status}
+                          {ob.status === 'pending' ? '待通知' : ob.status === 'notified' ? '已通知' : ob.status === 'in_progress' ? '接待中' : ob.status === 'training' ? '培训中' : ob.status === 'completed' ? '已完成' : ob.status}
                         </span>
                         <button
                           onClick={() => { setSelectedOnboarding(ob); loadTimeline(ob.id); }}
@@ -420,6 +458,35 @@ export default function OnboardingPage() {
                         <span className="text-xs text-yellow-400">入职已满7天，请安排回访</span>
                       </div>
                     )}
+                    {/* 步骤进度条 */}
+                    <div className="mt-3 border-t border-[#1e293b] pt-3">
+                      <div className="flex items-center justify-between">
+                        {onboardingSteps.map((step, idx) => {
+                          const currentStep = getOnboardingStepIndex(ob.status);
+                          const isCompleted = idx < currentStep;
+                          const isCurrent = idx === currentStep;
+                          return (
+                            <div key={step.key} className="flex flex-1 items-center">
+                              <div className="flex flex-col items-center">
+                                <div className={`flex h-7 w-7 items-center justify-center rounded-full border-2 transition-all ${
+                                  isCompleted ? 'border-green-500 bg-green-500/20 text-green-400' :
+                                  isCurrent ? 'border-sky-500 bg-sky-500/20 text-sky-400 ring-2 ring-sky-500/30' :
+                                  'border-[#1e293b] bg-[#111827] text-slate-500'
+                                }`}>
+                                  {isCompleted ? <CheckCircle className="h-3.5 w-3.5" /> : <span className="text-[10px] font-bold">{idx + 1}</span>}
+                                </div>
+                                <span className={`mt-0.5 text-[10px] ${isCurrent ? 'text-sky-400 font-medium' : isCompleted ? 'text-green-400' : 'text-slate-500'}`}>
+                                  {step.label}
+                                </span>
+                              </div>
+                              {idx < onboardingSteps.length - 1 && (
+                                <div className={`mx-1 h-0.5 flex-1 transition-all ${idx < currentStep ? 'bg-green-500' : 'bg-[#1e293b]'}`} />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 ))
               )}

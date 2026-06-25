@@ -177,22 +177,49 @@ export default function ContractsPage() {
   const confirmEmailSent = async () => {
     if (!selectedContract) return;
     try {
-      // 如果合同状态是pending_sign，先改为signing（开始签署）
+      // 状态流转逻辑：pending_sign -> signing -> completed
+      let nextStatus: string;
+      if (selectedContract.status === 'pending_sign') {
+        nextStatus = 'signing';
+      } else if (selectedContract.status === 'signing') {
+        nextStatus = 'completed';
+      } else {
+        nextStatus = selectedContract.status;
+      }
+
       const res = await fetch('/api/contracts', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: selectedContract.id,
-          status: selectedContract.status === 'pending_sign' ? 'signing' : selectedContract.status,
+          status: nextStatus,
         }),
       });
       const data = await res.json();
       if (data.code === 0) {
+        // 如果状态变为completed，自动触发入职流程
+        if (nextStatus === 'completed') {
+          try {
+            await fetch('/api/onboarding/auto-initiate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contractId: selectedContract.id }),
+            });
+          } catch (e) {
+            console.error('Auto initiate onboarding error:', e);
+          }
+        }
         setShowEmailModal(false);
+        setSelectedContract(null);
+        setEmailPreview(null);
         loadContracts();
+        alert(`邮件已确认发送，合同状态已更新为"${getStatusLabel(nextStatus)}"`);
+      } else {
+        alert(`状态更新失败: ${data.message || '未知错误'}`);
       }
     } catch (e) {
       console.error('Confirm email sent error:', e);
+      alert('确认发送失败，请重试');
     }
   };
 
@@ -339,6 +366,29 @@ export default function ContractsPage() {
       case 'renewed': return '已续签';
       case 'terminated': return '已终止';
       default: return status;
+    }
+  };
+
+  // 合同流程步骤
+  const contractSteps = [
+    { key: 'pending_sign', label: '待签署' },
+    { key: 'signing', label: '签核中' },
+    { key: 'completed', label: '已完成' },
+    { key: 'onboarding', label: '已发起入职' },
+  ];
+
+  const getContractStepIndex = (status: string, hasOnboarding: boolean) => {
+    if (hasOnboarding) return 3;
+    switch (status) {
+      case 'pending_sign': return 0;
+      case 'signing': return 1;
+      case 'completed':
+      case 'active':
+      case 'expiring':
+      case 'renewing':
+      case 'renewed':
+        return 2;
+      default: return 0;
     }
   };
 
@@ -570,6 +620,35 @@ export default function ContractsPage() {
                     </div>
                     {expandedContract === contract.id && (
                       <div className="border-t border-[#1e293b] bg-[#0a0e1a] p-4">
+                        {/* 步骤进度条 */}
+                        <div className="mb-4">
+                          <div className="flex items-center justify-between">
+                            {contractSteps.map((step, idx) => {
+                              const currentStep = getContractStepIndex(contract.status, !!contract.onboardingId);
+                              const isCompleted = idx < currentStep;
+                              const isCurrent = idx === currentStep;
+                              return (
+                                <div key={step.key} className="flex flex-1 items-center">
+                                  <div className="flex flex-col items-center">
+                                    <div className={`flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all ${
+                                      isCompleted ? 'border-green-500 bg-green-500/20 text-green-400' :
+                                      isCurrent ? 'border-sky-500 bg-sky-500/20 text-sky-400 ring-2 ring-sky-500/30' :
+                                      'border-[#1e293b] bg-[#111827] text-slate-500'
+                                    }`}>
+                                      {isCompleted ? <CheckCircle className="h-4 w-4" /> : <span className="text-xs font-bold">{idx + 1}</span>}
+                                    </div>
+                                    <span className={`mt-1 text-xs ${isCurrent ? 'text-sky-400 font-medium' : isCompleted ? 'text-green-400' : 'text-slate-500'}`}>
+                                      {step.label}
+                                    </span>
+                                  </div>
+                                  {idx < contractSteps.length - 1 && (
+                                    <div className={`mx-2 h-0.5 flex-1 transition-all ${idx < currentStep ? 'bg-green-500' : 'bg-[#1e293b]'}`} />
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
                         <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
                           <div>
                             <p className="text-slate-500">合同类型</p>
