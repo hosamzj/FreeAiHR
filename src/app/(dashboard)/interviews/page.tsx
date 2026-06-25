@@ -726,26 +726,29 @@ export default function InterviewsPage() {
                   <label className="block text-xs font-medium text-slate-400 mb-1.5">面试日期 *</label>
                   <input
                     type="date"
+                    lang="zh-CN"
                     value={formData.scheduledAt ? formData.scheduledAt.split('T')[0] : ''}
                     onChange={(e) => {
                       const date = e.target.value;
                       const time = formData.scheduledAt ? formData.scheduledAt.split('T')[1]?.slice(0, 5) || '10:00' : '10:00';
                       setFormData({ ...formData, scheduledAt: `${date}T${time}` });
                     }}
-                    className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
+                    className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none [color-scheme:dark]"
+                    placeholder="请选择面试日期"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1.5">面试时间 *</label>
                   <input
                     type="time"
+                    lang="zh-CN"
                     value={formData.scheduledAt ? formData.scheduledAt.split('T')[1]?.slice(0, 5) || '' : ''}
                     onChange={(e) => {
                       const time = e.target.value;
                       const date = formData.scheduledAt ? formData.scheduledAt.split('T')[0] : new Date().toISOString().split('T')[0];
                       setFormData({ ...formData, scheduledAt: `${date}T${time}` });
                     }}
-                    className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
+                    className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none [color-scheme:dark]"
                   />
                 </div>
               </div>

@@ -594,18 +594,22 @@ export default function ContractsPage() {
               <label className="text-sm text-slate-400">开始日期</label>
               <input
                 type="date"
+                lang="zh-CN"
                 value={newContract.startDate}
                 onChange={e => setNewContract({ ...newContract, startDate: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white [color-scheme:dark]"
+                placeholder="请选择开始日期"
               />
             </div>
             <div>
               <label className="text-sm text-slate-400">结束日期</label>
               <input
                 type="date"
+                lang="zh-CN"
                 value={newContract.endDate}
                 onChange={e => setNewContract({ ...newContract, endDate: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
+                className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white [color-scheme:dark]"
+                placeholder="请选择结束日期"
               />
             </div>
           </div>

@@ -472,9 +472,11 @@ export default function OnboardingPage() {
             <label className="text-sm text-slate-400">入职日期</label>
             <input
               type="date"
+              lang="zh-CN"
               value={newOnboarding.startDate}
               onChange={e => setNewOnboarding({ ...newOnboarding, startDate: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
+              className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white [color-scheme:dark]"
+              placeholder="请选择入职日期"
             />
           </div>
           <button
