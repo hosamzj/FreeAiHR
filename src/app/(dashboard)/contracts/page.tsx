@@ -164,31 +164,52 @@ export default function ContractsPage() {
   }, [showAddModal, loadEligibleEmployees]);
 
   const handleSelectEmployee = (emp: typeof eligibleEmployees[0]) => {
+    const startDate = emp.hireDate ? new Date(emp.hireDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+    // Default end date is 1 year from start date
+    const endDateObj = new Date(startDate);
+    endDateObj.setFullYear(endDateObj.getFullYear() + 1);
+    const endDate = endDateObj.toISOString().split('T')[0];
+    
     setNewContract({
       ...newContract,
+      employeeId: emp.id, // Use candidate id as employee id
       candidateId: emp.id,
       employeeName: emp.name,
       department: emp.department || '',
       position: emp.appliedPosition || '',
-      startDate: emp.hireDate ? new Date(emp.hireDate).toISOString().split('T')[0] : '',
+      startDate,
+      endDate,
     });
   };
 
   const handleAddContract = async () => {
+    // Validate required fields
+    if (!newContract.employeeId || !newContract.employeeName || !newContract.startDate || !newContract.endDate) {
+      alert('请填写必填字段：员工、开始日期、结束日期');
+      return;
+    }
+    
     try {
       const res = await fetch('/api/contracts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newContract),
       });
-      if (res.ok) {
+      
+      const data = await res.json();
+      
+      if (res.ok && data.code === 0) {
         setShowAddModal(false);
         setNewContract({ employeeId: '', candidateId: '', employeeName: '', department: '', position: '', startDate: '', endDate: '' });
         loadContracts();
         loadExpiring();
+        alert('合同创建成功！');
+      } else {
+        alert(`创建失败: ${data.message || '未知错误'}`);
       }
     } catch (e) {
       console.error('Add contract error:', e);
+      alert('创建合同失败，请稍后重试');
     }
   };
 
