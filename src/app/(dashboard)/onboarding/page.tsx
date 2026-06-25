@@ -422,17 +422,17 @@ export default function OnboardingPage() {
             <select
               value={newOnboarding.candidateId}
               onChange={e => {
-                const emp = eligibleEmployees.find(el => el.id === e.target.value);
+                const emp = (eligibleEmployees || []).find(el => el.id === e.target.value);
                 if (emp) handleSelectEmployee(emp);
               }}
               className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
             >
               <option value="">-- 请选择员工 --</option>
-              {eligibleEmployees.map(emp => (
+              {(eligibleEmployees || []).map(emp => (
                 <option key={emp.id} value={emp.id}>{emp.name} - {emp.department || '未分配'} / {emp.position || '未设置'}</option>
               ))}
             </select>
-            {eligibleEmployees.length === 0 && (
+            {(eligibleEmployees || []).length === 0 && (
               <p className="mt-1 text-xs text-slate-500">暂无可入职人员，请先完成合同签署</p>
             )}
           </div>

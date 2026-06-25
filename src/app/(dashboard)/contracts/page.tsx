@@ -549,11 +549,11 @@ export default function ContractsPage() {
               className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
             >
               <option value="">-- 手动填写或选择员工 --</option>
-              {eligibleEmployees.map(emp => (
+              {(eligibleEmployees || []).map(emp => (
                 <option key={emp.id} value={emp.id}>{emp.name} - {emp.department || '未分配'} - {emp.appliedPosition || '未设置'}</option>
               ))}
             </select>
-            {eligibleEmployees.length === 0 && (
+            {(eligibleEmployees || []).length === 0 && (
               <p className="mt-1 text-xs text-slate-500">暂无可选择的已入职员工，请手动填写</p>
             )}
           </div>
