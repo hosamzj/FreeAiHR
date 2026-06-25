@@ -13,9 +13,4 @@ start_service() {
     PORT=${DEPLOY_RUN_PORT} node dist/server.js
 }
 
-# Ensure database directory exists and is writable
-DB_DIR=$(dirname "${DATABASE_URL#file:}" 2>/dev/null || echo "/tmp")
-mkdir -p "$DB_DIR" 2>/dev/null || true
-
 echo "Starting HTTP service on port ${DEPLOY_RUN_PORT} for deploy..."
-start_service
