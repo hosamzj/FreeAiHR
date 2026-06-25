@@ -370,6 +370,8 @@ model Contract {
   reminderSent7   Boolean  @default(false)
   // 历史
   previousContractId String?
+  // 入职关联
+  onboardingId    String?  // 关联入职记录
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }

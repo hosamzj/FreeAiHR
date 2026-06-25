@@ -118,6 +118,12 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // 更新合同，关联入职记录
+    await prisma.contract.update({
+      where: { id: contractId },
+      data: { onboardingId: onboarding.id },
+    });
+
     return success({
       onboarding,
       tasksCreated: tasks.length,

@@ -16,6 +16,7 @@ interface Contract {
   status: string;
   source?: 'recruitment' | 'manual';
   candidateId?: string;
+  onboardingId?: string;
   renewInitiatedBy?: string;
   renewApprovedBy?: string;
   renewExecutedBy?: string;
@@ -257,6 +258,9 @@ export default function ContractsPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'pending_sign': return 'text-orange-400 bg-orange-500/10';
+      case 'signing': return 'text-yellow-400 bg-yellow-500/10';
+      case 'completed': return 'text-green-400 bg-green-500/10';
       case 'active': return 'text-green-400 bg-green-500/10';
       case 'expiring': return 'text-yellow-400 bg-yellow-500/10';
       case 'renewing': return 'text-sky-400 bg-sky-500/10';
@@ -268,12 +272,54 @@ export default function ContractsPage() {
 
   const getStatusLabel = (status: string) => {
     switch (status) {
+      case 'pending_sign': return '待签署';
+      case 'signing': return '签核中';
+      case 'completed': return '已完成';
       case 'active': return '生效中';
       case 'expiring': return '即将到期';
       case 'renewing': return '续签中';
       case 'renewed': return '已续签';
       case 'terminated': return '已终止';
       default: return status;
+    }
+  };
+
+  // 更新合同状态
+  const handleUpdateStatus = async (contractId: string, newStatus: string) => {
+    try {
+      const res = await fetch(`/api/contracts?id=${contractId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const data = await res.json();
+      if (data.code === 0) {
+        // 如果状态变为completed，自动触发入职流程
+        if (newStatus === 'completed') {
+          const contract = contracts.find(c => c.id === contractId);
+          if (contract) {
+            try {
+              const onboardingRes = await fetch('/api/onboarding/auto-initiate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contractId }),
+              });
+              const onboardingData = await onboardingRes.json();
+              if (onboardingData.code === 0) {
+                alert(`已为 ${contract.employeeName} 自动创建入职记录并通知相关人员`);
+              }
+            } catch (err) {
+              console.error('自动创建入职记录失败:', err);
+            }
+          }
+        }
+        loadContracts();
+      } else {
+        alert(data.message || '状态更新失败');
+      }
+    } catch (err) {
+      console.error('状态更新失败:', err);
+      alert('状态更新失败，请稍后重试');
     }
   };
 
@@ -405,6 +451,28 @@ export default function ContractsPage() {
                         <span className={`rounded-full px-2 py-1 text-xs ${getStatusColor(contract.status)}`}>
                           {getStatusLabel(contract.status)}
                         </span>
+                        {/* 状态流转按钮 */}
+                        {contract.status === 'pending_sign' && (
+                          <button
+                            onClick={() => handleUpdateStatus(contract.id, 'signing')}
+                            className="rounded-lg bg-yellow-500/10 px-3 py-1.5 text-xs text-yellow-400 hover:bg-yellow-500/20"
+                          >
+                            开始签署
+                          </button>
+                        )}
+                        {contract.status === 'signing' && (
+                          <button
+                            onClick={() => handleUpdateStatus(contract.id, 'completed')}
+                            className="rounded-lg bg-green-500/10 px-3 py-1.5 text-xs text-green-400 hover:bg-green-500/20"
+                          >
+                            完成签署
+                          </button>
+                        )}
+                        {contract.status === 'completed' && contract.onboardingId && (
+                          <span className="rounded-full bg-sky-500/10 px-2 py-1 text-xs text-sky-400">
+                            已发起入职
+                          </span>
+                        )}
                         <button
                           onClick={() => openTimeline(contract)}
                           className="rounded-lg bg-slate-500/10 px-2 py-1.5 text-xs text-slate-400 hover:bg-slate-500/20"
