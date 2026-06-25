@@ -95,10 +95,12 @@ export default function OnboardingPage() {
     try {
       const res = await fetch('/api/onboarding/dashboard');
       const data = await res.json();
-      setOnboardings(data.data?.onboardings || []);
-      setStats(data.data?.stats || { total: 0, pending: 0, inProgress: 0, completed: 0, needFollowUp: 0 });
+      const list = data?.data?.onboardings || data?.onboardings || [];
+      setOnboardings(Array.isArray(list) ? list : []);
+      setStats(data?.data?.stats || data?.stats || { total: 0, pending: 0, inProgress: 0, completed: 0, needFollowUp: 0 });
     } catch (e) {
       console.error('Load dashboard error:', e);
+      setOnboardings([]);
     }
   }, []);
 
@@ -106,9 +108,11 @@ export default function OnboardingPage() {
     try {
       const res = await fetch('/api/onboarding/daily-summary');
       const data = await res.json();
-      setDailySummary(data.data || null);
+      const summary = data?.data || data || null;
+      setDailySummary(summary);
     } catch (e) {
       console.error('Load daily summary error:', e);
+      setDailySummary(null);
     }
   }, []);
 
@@ -116,9 +120,11 @@ export default function OnboardingPage() {
     try {
       const res = await fetch('/api/onboarding/notification-rules');
       const data = await res.json();
-      setNotificationRules(data.data?.rules || []);
+      const rules = data?.data?.rules || data?.rules || [];
+      setNotificationRules(Array.isArray(rules) ? rules : []);
     } catch (e) {
       console.error('Load notification rules error:', e);
+      setNotificationRules([]);
     }
   }, []);
 
@@ -159,7 +165,11 @@ export default function OnboardingPage() {
       if (selectedOnboarding?.id === onboardingId) {
         const res = await fetch(`/api/onboarding/${onboardingId}/tasks`);
         const data = await res.json();
-        setSelectedOnboarding(data.data?.onboarding || null);
+        const ob = data?.data?.onboarding || data?.onboarding || null;
+        if (ob) {
+          ob.tasks = Array.isArray(ob.tasks) ? ob.tasks : [];
+        }
+        setSelectedOnboarding(ob);
       }
     } catch (e) {
       console.error('Complete task error:', e);
@@ -170,9 +180,11 @@ export default function OnboardingPage() {
     try {
       const res = await fetch(`/api/onboarding/${onboardingId}/timeline`);
       const data = await res.json();
-      setTimeline(data.data?.timeline || []);
+      const tl = data?.data?.timeline || data?.timeline || [];
+      setTimeline(Array.isArray(tl) ? tl : []);
     } catch (e) {
       console.error('Load timeline error:', e);
+      setTimeline([]);
     }
   };
 
@@ -180,7 +192,8 @@ export default function OnboardingPage() {
     try {
       const res = await fetch(`/api/onboarding/${onboardingId}/preview-email`);
       const data = await res.json();
-      setEmailPreview(data.data || null);
+      const preview = data?.data || data || null;
+      setEmailPreview(preview);
       setShowEmailPreview(true);
     } catch (e) {
       console.error('Preview email error:', e);
@@ -575,7 +588,7 @@ export default function OnboardingPage() {
             <div>
               <h3 className="mb-2 text-sm font-medium text-slate-300">入职任务</h3>
               <div className="space-y-2">
-                {selectedOnboarding.tasks?.map(task => (
+                {Array.isArray(selectedOnboarding.tasks) ? selectedOnboarding.tasks.map(task => (
                   <div key={task.id} className="flex items-center gap-3 rounded-lg border border-[#1e293b] p-3">
                     <span className="text-lg">{getCategoryIcon(task.category)}</span>
                     <div className="flex-1">
@@ -594,7 +607,7 @@ export default function OnboardingPage() {
                       </button>
                     )}
                   </div>
-                ))}
+                )) : null}
               </div>
             </div>
 
