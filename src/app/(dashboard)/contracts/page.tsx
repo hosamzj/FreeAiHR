@@ -141,9 +141,12 @@ export default function ContractsPage() {
     try {
       const res = await fetch('/api/contracts/eligible-employees');
       const data = await res.json();
-      setEligibleEmployees(data.data || []);
+      // API返回 { code: 0, data: { employees: [...], total: N } }
+      const employees = data?.data?.employees || data?.employees || [];
+      setEligibleEmployees(Array.isArray(employees) ? employees : []);
     } catch (e) {
       console.error('Load eligible employees error:', e);
+      setEligibleEmployees([]);
     }
   }, []);
 
