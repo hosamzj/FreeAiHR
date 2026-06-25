@@ -11,10 +11,29 @@ pnpm install --prefer-frozen-lockfile --prefer-offline --loglevel warn --reporte
 echo "Generating Prisma Client..."
 npx prisma generate
 
-echo "Building the Next.js project..."
-pnpm next build
+echo "Building the Next.js project with standalone output..."
+NEXT_PRIVATE_TURBOPACK=0 pnpm next build
 
-echo "Bundling server with tsup..."
-pnpm tsup src/server.ts --format cjs --platform node --target node20 --outDir dist --no-splitting --no-minify
+# Use the standalone build from .next/standalone
+echo "Setting up standalone deployment..."
+rm -rf dist
+cp -r .next/standalone dist
+
+# Copy static files to standalone
+echo "Copying static files..."
+cp -r .next/static dist/.next/static 2>/dev/null || true
+cp -r public dist/public 2>/dev/null || true
+
+# Copy Prisma schema and engines
+echo "Copying Prisma files..."
+mkdir -p dist/prisma
+cp prisma/schema.prisma dist/prisma/ 2>/dev/null || true
+
+# Copy .env.example if exists
+if [ -f .env.example ]; then
+    cp .env.example dist/.env.example
+fi
 
 echo "Build completed successfully!"
+echo "Deployment directory: dist/"
+ls -la dist/
