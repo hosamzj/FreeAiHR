@@ -38,6 +38,26 @@ export async function POST(request: NextRequest) {
     // 生成工号
     const employeeId = `EMP${Date.now().toString().slice(-6)}`;
 
+    // 生成合同编号：HT-YYYYMMDD-XXXX
+    const today = new Date();
+    const dateStr = today.getFullYear().toString() +
+      (today.getMonth() + 1).toString().padStart(2, '0') +
+      today.getDate().toString().padStart(2, '0');
+    
+    // 查询今天已有的合同数量，用于生成序号
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+    const todayContracts = await prisma.contract.count({
+      where: {
+        createdAt: {
+          gte: todayStart,
+          lt: todayEnd,
+        },
+      },
+    });
+    
+    const contractNo = `HT-${dateStr}-${(todayContracts + 1).toString().padStart(4, '0')}`;
+
     // 计算合同日期
     const startDate = new Date();
     const endDate = new Date();
@@ -46,6 +66,7 @@ export async function POST(request: NextRequest) {
     // 创建合同记录
     const contract = await prisma.contract.create({
       data: {
+        contractNo,
         employeeId,
         employeeName: candidate.name,
         department: candidate.department || '',

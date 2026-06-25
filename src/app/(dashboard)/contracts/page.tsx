@@ -6,6 +6,7 @@ import { Modal } from '@/components/ui/modal';
 
 interface Contract {
   id: string;
+  contractNo?: string;
   employeeId: string;
   employeeName: string;
   department?: string;
@@ -426,6 +427,11 @@ export default function ContractsPage() {
                         <div>
                           <div className="flex items-center gap-2">
                             <p className="font-medium text-white">{contract.employeeName}</p>
+                            {contract.contractNo && (
+                              <span className="rounded bg-slate-700/50 px-1.5 py-0.5 text-[10px] text-slate-300 font-mono">
+                                {contract.contractNo}
+                              </span>
+                            )}
                             {contract.source === 'recruitment' && (
                               <span className="rounded-full bg-green-500/10 px-1.5 py-0.5 text-[10px] text-green-400">
                                 招聘转入

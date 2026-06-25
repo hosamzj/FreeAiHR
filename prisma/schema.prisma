@@ -344,6 +344,7 @@ model InterviewPackage {
 
 model Contract {
   id              String   @id @default(cuid())
+  contractNo      String?  @unique // 合同编号 HT-YYYYMMDD-XXXX
   employeeId      String   // 关联User表
   employeeName    String
   department      String?

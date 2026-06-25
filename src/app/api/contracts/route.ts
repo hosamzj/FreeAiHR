@@ -37,8 +37,29 @@ export async function POST(request: NextRequest) {
       return error(422, '缺少必要字段');
     }
 
+    // 生成合同编号：HT-YYYYMMDD-XXXX
+    const today = new Date();
+    const dateStr = today.getFullYear().toString() +
+      (today.getMonth() + 1).toString().padStart(2, '0') +
+      today.getDate().toString().padStart(2, '0');
+    
+    // 查询今天已有的合同数量，用于生成序号
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+    const todayContracts = await prisma.contract.count({
+      where: {
+        createdAt: {
+          gte: todayStart,
+          lt: todayEnd,
+        },
+      },
+    });
+    
+    const contractNo = `HT-${dateStr}-${(todayContracts + 1).toString().padStart(4, '0')}`;
+
     const contract = await prisma.contract.create({
       data: {
+        contractNo,
         employeeId,
         employeeName,
         department,
