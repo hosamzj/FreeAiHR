@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
       where = `WHERE "status" = '${status}'`;
     }
     const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
-      `SELECT * FROM "Position" ${where} ORDER BY "createdAt" DESC`
+      `SELECT p.*, CAST((SELECT COUNT(*) FROM "CandidatePosition" cp WHERE cp."positionId" = p.id) AS INTEGER) as "_count_candidates" FROM "Position" p ${where} ORDER BY p."createdAt" DESC`
     );
     return success(rows);
   } catch (e) {

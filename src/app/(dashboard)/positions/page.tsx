@@ -22,7 +22,7 @@ interface Position {
   templateId: string | null;
   createdAt: string;
   creator: { id: string; name: string };
-  _count: { candidates: number };
+  _count_candidates: number;
 }
 
 interface DictionaryItem {
@@ -470,7 +470,7 @@ export default function PositionsPage() {
                 <span>{formatSalary(pos.salaryMin, pos.salaryMax)}</span>
                 <span className="flex items-center gap-1">
                   <TrendingUp className="w-3 h-3" />
-                  {pos._count.candidates}候选人
+                  {(pos._count_candidates ?? 0)}候选人
                 </span>
               </div>
 
