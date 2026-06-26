@@ -57,6 +57,7 @@ model Candidate {
   currentPosition String?
   skills          String   @default("[]") // JSON array
   resumeUrl       String?
+  resumeFileKey   String?  // S3 object storage key for original resume file
   resumeParsed    String   @default("{}") // JSON parsed data
   source          String   @default("manual") // manual, referral, channel
   status          String   @default("new") // new, screening, interviewing, offered, hired, rejected, archived

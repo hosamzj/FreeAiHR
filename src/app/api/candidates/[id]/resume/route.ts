@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, success, error } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { writeFile, mkdir } from 'fs/promises';
-import { existsSync } from 'fs';
-import path from 'path';
+import { S3Storage } from 'coze-coding-dev-sdk';
 
-// POST /api/candidates/[id]/resume - Upload resume file
+const storage = new S3Storage({
+  endpointUrl: process.env.COZE_BUCKET_ENDPOINT_URL,
+  accessKey: '',
+  secretKey: '',
+  bucketName: process.env.COZE_BUCKET_NAME,
+  region: 'cn-beijing',
+});
+
+// POST /api/candidates/[id]/resume - Upload resume file to S3
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -34,8 +40,8 @@ export async function POST(
     }
 
     // Validate file type
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 
-                          'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif',
+      'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
     if (!allowedTypes.includes(file.type)) {
       return error(400, '不支持的文件格式，仅支持 PDF、Word、图片');
     }
@@ -48,32 +54,39 @@ export async function POST(
 
     // Generate unique filename
     const ext = file.name.split('.').pop() || 'pdf';
-    const filename = `${id}_${Date.now()}.${ext}`;
-    
-    // Ensure upload directory exists
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'resumes');
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true });
-    }
+    const safeName = file.name.replace(/[^\x00-\x7F]/g, '_') || 'resume';
+    const fileName = `resumes/${id}/${Date.now()}_${safeName}.${ext}`;
 
-    // Save file
+    // Upload to S3 object storage
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    const filePath = path.join(uploadDir, filename);
-    await writeFile(filePath, buffer);
-
-    // Update candidate with resume URL
-    const resumeUrl = `/uploads/resumes/${filename}`;
-    await prisma.candidate.update({
-      where: { id },
-      data: { resumeUrl },
+    const fileKey = await storage.uploadFile({
+      fileContent: buffer,
+      fileName,
+      contentType: file.type,
     });
 
-    return success({ 
+    // Generate presigned URL for access
+    const resumeUrl = await storage.generatePresignedUrl({
+      key: fileKey,
+      expireTime: 2592000, // 30 days
+    });
+
+    // Update candidate with resume URL and file key
+    await prisma.candidate.update({
+      where: { id },
+      data: {
+        resumeUrl,
+        resumeFileKey: fileKey,
+      },
+    });
+
+    return success({
       resumeUrl,
+      resumeFileKey: fileKey,
       filename: file.name,
       size: file.size,
-      type: file.type 
+      type: file.type
     }, '简历上传成功');
   } catch (e) {
     console.error('Upload resume error:', e);
@@ -84,7 +97,7 @@ export async function POST(
   }
 }
 
-// GET /api/candidates/[id]/resume - Get resume info
+// GET /api/candidates/[id]/resume - Get resume info with download URL
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -98,11 +111,12 @@ export async function GET(
 
     const candidate = await prisma.candidate.findUnique({
       where: { id },
-      select: { 
-        id: true, 
-        name: true, 
+      select: {
+        id: true,
+        name: true,
         appliedPosition: true,
-        resumeUrl: true 
+        resumeUrl: true,
+        resumeFileKey: true,
       },
     });
 
@@ -110,12 +124,26 @@ export async function GET(
       return error(404, '候选人不存在');
     }
 
+    // Generate fresh presigned URL if we have a file key
+    let downloadUrl = candidate.resumeUrl;
+    if (candidate.resumeFileKey) {
+      try {
+        downloadUrl = await storage.generatePresignedUrl({
+          key: candidate.resumeFileKey,
+          expireTime: 3600, // 1 hour for download
+        });
+      } catch {
+        // Fall back to stored URL
+      }
+    }
+
     return success({
       id: candidate.id,
       name: candidate.name,
       appliedPosition: candidate.appliedPosition,
-      resumeUrl: candidate.resumeUrl,
-      hasResume: !!candidate.resumeUrl,
+      resumeUrl: downloadUrl,
+      resumeFileKey: candidate.resumeFileKey,
+      hasResume: !!candidate.resumeFileKey,
     });
   } catch (e) {
     console.error('Get resume error:', e);

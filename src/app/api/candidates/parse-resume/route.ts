@@ -1,12 +1,24 @@
 import { NextRequest } from 'next/server';
 import { success, error } from '@/lib/auth';
 import { parseResume, parseResumeFromImage } from '@/lib/ai';
+import { S3Storage } from 'coze-coding-dev-sdk';
+
+const storage = new S3Storage({
+  endpointUrl: process.env.COZE_BUCKET_ENDPOINT_URL,
+  accessKey: '',
+  secretKey: '',
+  bucketName: process.env.COZE_BUCKET_NAME,
+  region: 'cn-beijing',
+});
 
 // 将 AI 原始输出规范化为前端期望的格式
 function normalizeParsed(raw: Record<string, unknown>): Record<string, unknown> {
   const skills = Array.isArray(raw.skills) ? raw.skills as string[] : [];
   const educationArr = Array.isArray(raw.education) ? raw.education as Array<Record<string, unknown>> : [];
   const experienceArr = Array.isArray(raw.experience) ? raw.experience as Array<Record<string, unknown>> : [];
+  const certificates = Array.isArray(raw.certificates) ? raw.certificates as string[] : [];
+  const honors = Array.isArray(raw.honors) ? raw.honors as string[] : [];
+  const languages = Array.isArray(raw.languages) ? raw.languages as string[] : [];
 
   // 学历：取最高学历
   const topEdu = educationArr[0];
@@ -17,36 +29,62 @@ function normalizeParsed(raw: Record<string, unknown>): Record<string, unknown> 
   // 学校
   const school = topEdu?.school as string || (typeof raw.school === 'string' ? raw.school : '');
 
+  // 专业
+  const major = topEdu?.major as string || (typeof raw.major === 'string' ? raw.major : '');
+
+  // 主修课程
+  const courses = Array.isArray(topEdu?.courses) ? topEdu.courses as string[] : [];
+
   // 工作年限：从 experience 数组推算
   const yearsExp = experienceArr.length > 0
-    ? `${experienceArr.length}年以上工作经验`
-    : (typeof raw.experience === 'string' ? raw.experience : '');
+    ? experienceArr.length
+    : (typeof raw.experience === 'number' ? raw.experience : 0);
 
   // 当前/最近公司
   const latestExp = experienceArr[0];
   const company = latestExp?.company as string || '';
+  const currentPosition = latestExp?.position as string || '';
 
-  // 当前/最近职位
-  const position = latestExp?.position as string || '';
+  // 应聘岗位
+  const appliedPosition = (raw.appliedPosition as string) || currentPosition || '';
 
   // 匹配分数：用 confidence 映射
   const confidence = typeof raw.confidence === 'number' ? raw.confidence : 0.85;
   const matchScore = Math.round(confidence * 100);
+
+  // 自我评价
+  const selfEvaluation = (raw.selfEvaluation as string) || '';
+
+  // 籍贯/现居地
+  const birthplace = (raw.birthplace as string) || '';
+  const currentLocation = (raw.currentLocation as string) || '';
 
   return {
     name: raw.name || '',
     phone: raw.phone || '',
     email: raw.email || '',
     avatar: '',
-    position,
+    position: appliedPosition,
     education: educationStr,
     school,
+    major,
+    courses,
     experience: yearsExp,
     company,
+    currentPosition,
     matchScore,
     summary: raw.summary || '',
+    selfEvaluation,
     matchedSkills: skills,
     uncertainSkills: [] as string[],
+    certificates,
+    honors,
+    languages,
+    birthplace,
+    currentLocation,
+    // 原始数据透传，供详情弹窗使用
+    rawEducation: educationArr,
+    rawExperience: experienceArr,
   };
 }
 
@@ -92,9 +130,25 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // 上传原始简历文件到对象存储
+      let resumeFileKey: string | null = null;
+      try {
+        const ext = fileName.split('.').pop() || 'bin';
+        const safeFileName = `resumes/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        resumeFileKey = await storage.uploadFile({
+          fileContent: buffer,
+          fileName: safeFileName,
+          contentType: mimeType,
+        });
+      } catch (uploadErr) {
+        console.error('[Resume] S3 upload failed:', uploadErr);
+        // 上传失败不阻断解析流程
+      }
+
       return success({
         ...normalizeParsed(aiParsed),
         fileName,
+        resumeFileKey,
         source: 'ai',
       });
     }

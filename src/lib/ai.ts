@@ -257,26 +257,57 @@ ${resumeText.substring(0, 8000)}
 /** 从图片/PDF文件中解析简历（多模态视觉） */
 export async function parseResumeFromImage(base64Image: string, mimeType: string): Promise<Record<string, unknown>> {
   const result = await callLLM(
-    `请从这张简历图片中提取结构化信息，输出 JSON。
+    `你是一位专业的中文简历解析专家。请仔细阅读这张简历图片中的每一个文字，精确提取以下结构化信息。
 
-请提取以下字段（如果简历中不存在则设为 null 或空数组）：
+【重要规则】
+1. 逐字逐句阅读图片中的所有文字，不要遗漏任何信息
+2. 姓名、手机号、邮箱、公司名、学校名必须与图片原文完全一致
+3. 工作经历按时间倒序排列（最近的在前面）
+4. 技能从"技能证书"、"专业技能"、"个人技能"等板块提取
+5. 自我评价、获得荣誉、证书等附加信息也要提取
+6. 如果某个字段在简历中确实不存在，设为 null 或空数组
+7. 不要编造、不要猜测、不要补充图片中没有的信息
+
+请输出以下 JSON 格式：
 {
-  "name": "姓名",
-  "phone": "手机号码",
-  "email": "邮箱地址",
-  "education": [{"school": "学校", "degree": "学历", "major": "专业", "startDate": "开始日期", "endDate": "结束日期"}],
-  "experience": [{"company": "公司", "position": "职位", "startDate": "开始日期", "endDate": "结束日期", "description": "工作描述"}],
-  "skills": ["技能1", "技能2"],
-  "certificates": ["证书1"],
-  "projects": [{"name": "项目名", "description": "项目描述"}],
-  "summary": "候选人综合概述（50字以内）",
-  "confidence": 0.95
-}
-
-注意：请仔细阅读简历图片中的文字，精确提取姓名、公司名、学校名、技能等关键信息。不要编造不存在的信息。`,
+  "name": "姓名（原文）",
+  "phone": "手机号码（原文）",
+  "email": "邮箱地址（原文）",
+  "birthplace": "籍贯",
+  "birthDate": "出生年月",
+  "currentLocation": "现居地",
+  "politicalStatus": "政治面貌",
+  "education": [
     {
-      systemPrompt: '你是一位专业的简历解析专家。请从简历图片中精确提取结构化信息。只返回 JSON，不要任何其他内容。',
-      temperature: 0.1,
+      "school": "学校全称",
+      "degree": "学历（如本科、硕士）",
+      "major": "专业名称",
+      "startDate": "开始日期",
+      "endDate": "结束日期",
+      "courses": ["主修课程1", "主修课程2"]
+    }
+  ],
+  "experience": [
+    {
+      "company": "公司全称",
+      "position": "职位名称",
+      "startDate": "开始日期",
+      "endDate": "结束日期",
+      "description": "工作描述（保留原文要点）"
+    }
+  ],
+  "skills": ["技能1", "技能2"],
+  "certificates": ["证书1", "证书2"],
+  "languages": ["语言能力描述"],
+  "selfEvaluation": "自我评价（原文摘要）",
+  "honors": ["获得荣誉1", "获得荣誉2"],
+  "appliedPosition": "应聘岗位",
+  "summary": "候选人综合概述（80字以内）",
+  "confidence": 0.95
+}`,
+    {
+      systemPrompt: '你是一位顶级的中文简历OCR与解析专家。你的任务是从简历图片中逐字逐句提取所有文字信息，并精确结构化。只返回 JSON，不要任何解释或额外文字。',
+      temperature: 0.05,
       responseFormat: 'json_object',
       contentParts: [{
         type: 'image_url',

@@ -32,9 +32,10 @@ import {
   Mail,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { mockCandidates } from '@/lib/mock-data';
+import { mockCandidates, type Candidate } from '@/lib/mock-data';
 import { Modal } from '@/components/ui/modal';
 import { ResumePreviewModal } from '@/components/resume-preview-modal';
+import { CandidateDetailModal } from '@/components/candidate-detail-modal';
 import { AICandidateProfile } from '@/components/ai-candidate-profile';
 import { EmailImport } from '@/components/email-import';
 
@@ -48,9 +49,9 @@ export default function ResumesPage() {
   const [isParsing, setIsParsing] = useState(false);
   const [parsedResult, setParsedResult] = useState<{
     name: string; avatar: string; position: string; education: string;
-    school: string; experience: string; company: string; matchScore: number;
+    school: string; experience: number; company: string; matchScore: number;
     summary: string; matchedSkills: string[]; uncertainSkills: string[];
-    phone?: string; email?: string;
+    phone?: string; email?: string; resumeFileKey?: string;
   } | null>(null);
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
@@ -64,6 +65,10 @@ export default function ResumesPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showResumePreview, setShowResumePreview] = useState(false);
   const [resumePreviewData, setResumePreviewData] = useState<{ id: string; name: string; position?: string; resumeUrl?: string } | null>(null);
+
+  // Detail modal state
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [detailCandidate, setDetailCandidate] = useState<Record<string, unknown> | null>(null);
 
   // AI features state
   const [showAIProfileModal, setShowAIProfileModal] = useState(false);
@@ -797,10 +802,94 @@ export default function ResumesPage() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => alert('已加入候选人池')} className="flex h-8 items-center gap-1.5 rounded-lg bg-sky-500 px-3 text-xs font-medium text-white hover:bg-sky-600 transition-colors">
+                <button
+                  onClick={async () => {
+                    if (!parsedResult) return;
+                    try {
+                      const res = await fetch('/api/candidates', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          name: parsedResult.name,
+                          email: parsedResult.email || '',
+                          phone: parsedResult.phone || '',
+                          education: parsedResult.education,
+                          school: parsedResult.school,
+                          experience: parsedResult.experience,
+                          skills: parsedResult.matchedSkills,
+                          appliedPosition: parsedResult.position,
+                          matchScore: parsedResult.matchScore,
+                          resumeFileKey: parsedResult.resumeFileKey || '',
+                          resumeParsed: JSON.stringify(parsedResult),
+                          source: 'ai',
+                        }),
+                      });
+                      const data = await res.json();
+                      if (data.code === 0) {
+                        // Add to local candidates list
+                        const newCandidate: Candidate = {
+                          id: data.data.id,
+                          name: parsedResult.name,
+                          position: parsedResult.position,
+                          status: 'new' as const,
+                          appliedAt: new Date().toISOString().split('T')[0],
+                          avatar: parsedResult.name.charAt(0),
+                          avatarColor: 'bg-gradient-to-br from-sky-500/20 to-blue-600/20 text-sky-400 border border-sky-500/20',
+                          matchScore: parsedResult.matchScore,
+                          isAIRecommended: true,
+                          skills: parsedResult.matchedSkills || [],
+                          email: parsedResult.email || '',
+                          phone: parsedResult.phone || '',
+                          education: parsedResult.education || '',
+                          school: parsedResult.school || '',
+                          major: '',
+                          department: '',
+                          experience: typeof parsedResult.experience === 'number' ? parsedResult.experience : 0,
+                          company: parsedResult.company,
+                          resumeFileKey: parsedResult.resumeFileKey,
+                          resumeParsed: parsedResult,
+                          matchedSkills: parsedResult.matchedSkills || [],
+                          unmatchedSkills: parsedResult.uncertainSkills || [],
+                          workHistory: [],
+                          source: 'ai',
+                          tags: [],
+                        };
+                        setCandidates(prev => [newCandidate, ...prev]);
+                        setParsedResult(null);
+                      } else {
+                        alert(data.message || '添加失败');
+                      }
+                    } catch {
+                      alert('添加候选人失败，请重试');
+                    }
+                  }}
+                  className="flex h-8 items-center gap-1.5 rounded-lg bg-sky-500 px-3 text-xs font-medium text-white hover:bg-sky-600 transition-colors"
+                >
                   <Check className="h-3.5 w-3.5" /> 加入候选人池
                 </button>
-                <button onClick={() => alert('查看详情功能开发中')} className="flex h-8 items-center gap-1.5 rounded-lg border border-[#1e293b] px-3 text-xs text-slate-400 hover:text-white transition-colors">
+                <button
+                  onClick={() => {
+                    if (!parsedResult) return;
+                    setDetailCandidate({
+                      name: parsedResult.name,
+                      email: parsedResult.email,
+                      phone: parsedResult.phone,
+                      education: parsedResult.education,
+                      school: parsedResult.school,
+                      experience: parsedResult.experience,
+                      currentCompany: parsedResult.company,
+                      currentPosition: parsedResult.position,
+                      matchScore: parsedResult.matchScore,
+                      aiSummary: parsedResult.summary,
+                      resumeFileKey: parsedResult.resumeFileKey,
+                      resumeParsed: parsedResult,
+                      status: 'new',
+                      source: 'ai',
+                    });
+                    setShowDetailModal(true);
+                  }}
+                  className="flex h-8 items-center gap-1.5 rounded-lg border border-[#1e293b] px-3 text-xs text-slate-400 hover:text-white transition-colors"
+                >
                   <Eye className="h-3.5 w-3.5" /> 查看详情
                 </button>
               </div>
@@ -1142,7 +1231,29 @@ export default function ResumesPage() {
             {/* Footer */}
             <div className="flex items-center justify-between border-t border-[#1e293b] bg-[#0a0e1a]/30 px-3 md:px-4 py-2">
               <button
-                onClick={() => setExpandedCandidate(expandedCandidate === candidate.id ? null : candidate.id)}
+                onClick={() => {
+                  setDetailCandidate({
+                    id: candidate.id,
+                    name: candidate.name,
+                    email: candidate.email,
+                    phone: candidate.phone,
+                    education: candidate.education,
+                    school: candidate.school,
+                    experience: candidate.experience,
+                    currentCompany: candidate.company,
+                    currentPosition: candidate.position,
+                    matchScore: candidate.matchScore,
+                    aiSummary: candidate.aiSummary,
+                    skills: candidate.skills,
+                    resumeFileKey: candidate.resumeFileKey,
+                    resumeParsed: candidate.resumeParsed,
+                    status: candidate.status,
+                    source: candidate.source || 'manual',
+                    tags: candidate.tags,
+                    appliedPosition: candidate.position,
+                  });
+                  setShowDetailModal(true);
+                }}
                 className="text-[11px] md:text-xs text-slate-500 hover:text-sky-400 cursor-pointer transition-colors"
               >
                 {expandedCandidate === candidate.id ? '收起详情' : '展开详情'}
@@ -1718,6 +1829,24 @@ export default function ResumesPage() {
           />
         )}
       </Modal>
+
+      {/* Candidate Detail Modal */}
+      {showDetailModal && detailCandidate && (
+        <CandidateDetailModal
+          isOpen={showDetailModal}
+          onClose={() => { setShowDetailModal(false); setDetailCandidate(null); }}
+          candidate={detailCandidate as {
+            id: string; name: string; email?: string | null; phone?: string | null;
+            education?: string | null; school?: string | null; major?: string | null;
+            experience?: number | null; currentCompany?: string | null; currentPosition?: string | null;
+            skills?: string | string[]; resumeUrl?: string | null; resumeFileKey?: string | null;
+            resumeParsed?: string | Record<string, unknown>; status?: string;
+            matchScore?: number | null; aiSummary?: string | null;
+            appliedPosition?: string | null; department?: string | null;
+            source?: string; tags?: string | string[]; createdAt?: string;
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -17,6 +17,9 @@ export interface Candidate {
   matchScore: number;
   status: 'new' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected';
   resumeUrl?: string;
+  resumeFileKey?: string;
+  resumeParsed?: Record<string, unknown>;
+  company?: string;
   tags: string[];
   appliedAt: string;
   source: string;
