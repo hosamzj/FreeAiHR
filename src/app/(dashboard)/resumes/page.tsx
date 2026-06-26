@@ -64,6 +64,12 @@ export default function ResumesPage() {
   const [showAIProfileModal, setShowAIProfileModal] = useState(false);
   const [aiProfileCandidate, setAiProfileCandidate] = useState<{ id: string; name: string; position?: string } | null>(null);
 
+  // Multi-select & batch add to candidate pool
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBatchPoolModal, setShowBatchPoolModal] = useState(false);
+  const [batchPoolForm, setBatchPoolForm] = useState({ status: 'active', skillTags: '', notes: '' });
+  const [batchPoolLoading, setBatchPoolLoading] = useState(false);
+
   // Duplicate detection state
   const [duplicateInfo, setDuplicateInfo] = useState<{
     isDuplicate: boolean;
@@ -257,6 +263,59 @@ export default function ResumesPage() {
       setActionLoading(null);
     }
   }, []);
+
+  // Toggle candidate selection
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    const filtered = candidates.filter(c => {
+      if (activeTab !== 'all' && c.status !== activeTab) return false;
+      if (searchQuery && !c.name.toLowerCase().includes(searchQuery.toLowerCase()) && !c.position?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      return true;
+    });
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(c => c.id)));
+    }
+  }, [candidates, activeTab, searchQuery, selectedIds.size]);
+
+  // Batch add to candidate pool
+  const handleBatchAddToPool = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    setBatchPoolLoading(true);
+    try {
+      const res = await fetch('/api/candidate-pool/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          candidateIds: Array.from(selectedIds),
+          status: batchPoolForm.status,
+          skillTags: batchPoolForm.skillTags.split(',').map(s => s.trim()).filter(Boolean),
+          notes: batchPoolForm.notes,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.code === 0) {
+        alert(`成功将 ${selectedIds.size} 位候选人添加到候选人池`);
+        setSelectedIds(new Set());
+        setShowBatchPoolModal(false);
+        setBatchPoolForm({ status: 'active', skillTags: '', notes: '' });
+      } else {
+        alert(data.message || '批量添加失败');
+      }
+    } catch (e) {
+      alert('批量添加失败，请重试');
+    } finally {
+      setBatchPoolLoading(false);
+    }
+  }, [selectedIds, batchPoolForm]);
 
   const handleScheduleInterview = useCallback(async (candidateId: string, candidateName: string) => {
     setSelectedCandidate(candidateId);
@@ -564,6 +623,28 @@ export default function ResumesPage() {
         </div>
       </div>
 
+      {/* Batch Action Bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center justify-between rounded-xl border border-orange-500/30 bg-orange-500/5 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-orange-400">已选择 {selectedIds.size} 位候选人</span>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="text-xs text-slate-500 hover:text-white transition-colors"
+            >
+              取消选择
+            </button>
+          </div>
+          <button
+            onClick={() => setShowBatchPoolModal(true)}
+            className="flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 transition-colors"
+          >
+            <UserCheck className="h-4 w-4" />
+            添加到候选人池
+          </button>
+        </div>
+      )}
+
       {/* Upload Area */}
       <div
         onDragOver={(e) => { e.preventDefault(); setIsUploading(true); }}
@@ -744,8 +825,22 @@ export default function ResumesPage() {
         filteredCandidates.map((candidate) => (
           <div
             key={candidate.id}
-            className="card-hover rounded-xl border border-[#1e293b] bg-[#111827] overflow-hidden"
+            className="card-hover rounded-xl border border-[#1e293b] bg-[#111827] overflow-hidden relative"
           >
+            {/* Selection checkbox */}
+            <div className="absolute top-3 left-3 z-10">
+              <button
+                onClick={(e) => { e.stopPropagation(); toggleSelect(candidate.id); }}
+                className={cn(
+                  'flex h-5 w-5 items-center justify-center rounded border-2 transition-all',
+                  selectedIds.has(candidate.id)
+                    ? 'border-orange-500 bg-orange-500 text-white'
+                    : 'border-[#334155] bg-transparent hover:border-slate-400'
+                )}
+              >
+                {selectedIds.has(candidate.id) && <Check className="h-3 w-3" />}
+              </button>
+            </div>
             <div className="p-3 md:p-4">
               <div className="flex items-start gap-2.5 md:gap-3">
                 <div className={cn(
@@ -1517,6 +1612,59 @@ export default function ResumesPage() {
             >
               <Copy className="w-4 h-4 text-sky-400" />
               <span className="text-xs text-sky-400">保留两份</span>
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Batch Add to Candidate Pool Modal */}
+      <Modal isOpen={showBatchPoolModal} onClose={() => setShowBatchPoolModal(false)} title="批量添加到候选人池">
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 rounded-lg bg-orange-500/5 border border-orange-500/20 p-3">
+            <UserCheck className="h-4 w-4 text-orange-400 shrink-0" />
+            <p className="text-xs text-orange-400">将 {selectedIds.size} 位候选人批量添加到候选人池</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">状态</label>
+            <select
+              value={batchPoolForm.status}
+              onChange={e => setBatchPoolForm(prev => ({ ...prev, status: e.target.value }))}
+              className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none"
+            >
+              <option value="active">活跃</option>
+              <option value="reserve">储备</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">技能标签（逗号分隔，可选）</label>
+            <input
+              type="text"
+              value={batchPoolForm.skillTags}
+              onChange={e => setBatchPoolForm(prev => ({ ...prev, skillTags: e.target.value }))}
+              className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 placeholder:text-slate-600 focus:border-sky-500/50 focus:outline-none"
+              placeholder="React, TypeScript, Node.js"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">备注（可选）</label>
+            <textarea
+              value={batchPoolForm.notes}
+              onChange={e => setBatchPoolForm(prev => ({ ...prev, notes: e.target.value }))}
+              className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-slate-300 placeholder:text-slate-600 focus:border-sky-500/50 focus:outline-none"
+              rows={3}
+              placeholder="添加备注信息..."
+            />
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={handleBatchAddToPool}
+              disabled={batchPoolLoading}
+              className="flex-1 h-9 rounded-lg bg-orange-500 text-sm font-medium text-white hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {batchPoolLoading ? '添加中...' : `确认添加 ${selectedIds.size} 人`}
+            </button>
+            <button onClick={() => setShowBatchPoolModal(false)} className="flex-1 h-9 rounded-lg border border-[#1e293b] text-sm text-slate-400 hover:text-white transition-colors">
+              取消
             </button>
           </div>
         </div>
