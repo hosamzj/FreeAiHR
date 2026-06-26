@@ -29,6 +29,7 @@ import {
   Copy,
   GitBranch,
   CheckCircle,
+  Mail,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { mockCandidates, mockParsedResume } from '@/lib/mock-data';
@@ -36,6 +37,7 @@ import { Modal } from '@/components/ui/modal';
 import { ResumePreviewModal } from '@/components/resume-preview-modal';
 import { AIJDModal } from '@/components/ai-jd-modal';
 import { AICandidateProfile } from '@/components/ai-candidate-profile';
+import { EmailImport } from '@/components/email-import';
 
 type CandidateStatus = 'new' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected';
 type TabType = 'all' | CandidateStatus;
@@ -49,6 +51,7 @@ export default function ResumesPage() {
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showCollectionModal, setShowCollectionModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [showRejectOfferModal, setShowRejectOfferModal] = useState(false);
@@ -544,6 +547,14 @@ export default function ResumesPage() {
           </button>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowCollectionModal(true)}
+            className="flex h-9 items-center gap-1.5 rounded-lg border border-orange-500/30 bg-orange-500/10 px-2.5 text-sm text-orange-400 hover:bg-orange-500/20 transition-colors sm:px-3"
+          >
+            <Mail className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">简历采集</span>
+            <span className="sm:hidden">采集</span>
+          </button>
           <button
             onClick={() => setShowAIJDModal(true)}
             className="flex h-9 items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2.5 text-sm text-sky-400 hover:bg-sky-500/20 transition-colors sm:px-3"
@@ -1099,6 +1110,14 @@ export default function ResumesPage() {
               重置
             </button>
           </div>
+        </div>
+      </Modal>
+
+      {/* Resume Collection Modal */}
+      <Modal isOpen={showCollectionModal} onClose={() => setShowCollectionModal(false)} title="简历采集" size="lg">
+        <div className="space-y-2">
+          <p className="text-xs text-slate-500">从邮箱拖拽邮件或粘贴简历内容，AI 自动提取候选人信息</p>
+          <EmailImport />
         </div>
       </Modal>
 
