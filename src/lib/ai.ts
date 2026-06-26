@@ -54,6 +54,12 @@ export async function getAIConfig(): Promise<AIConfig> {
 // ============================================================
 // 通用 LLM 调用（OpenAI 兼容协议）
 // ============================================================
+export interface ContentPart {
+  type: 'text' | 'image_url';
+  text?: string;
+  image_url?: { url: string; detail?: 'low' | 'high' | 'auto' };
+}
+
 export async function callLLM(
   prompt: string,
   options: {
@@ -61,6 +67,7 @@ export async function callLLM(
     temperature?: number;
     maxTokens?: number;
     responseFormat?: 'text' | 'json_object';
+    contentParts?: ContentPart[];
   } = {}
 ): Promise<string> {
   const config = await getAIConfig();
@@ -72,11 +79,16 @@ export async function callLLM(
   }
 
   try {
-    const messages: Array<{ role: string; content: string }> = [];
+    const messages: Array<{ role: string; content: string | ContentPart[] }> = [];
     if (options.systemPrompt) {
       messages.push({ role: 'system', content: options.systemPrompt });
     }
-    messages.push({ role: 'user', content: prompt });
+    // 支持多模态 content（图片 + 文本）
+    if (options.contentParts && options.contentParts.length > 0) {
+      messages.push({ role: 'user', content: options.contentParts });
+    } else {
+      messages.push({ role: 'user', content: prompt });
+    }
 
     const body: Record<string, unknown> = {
       model: config.model,
@@ -236,6 +248,43 @@ ${resumeText.substring(0, 8000)}
       systemPrompt: '你是一位专业的简历解析专家。请从简历文本中精确提取结构化信息。只返回 JSON，不要任何其他内容。',
       temperature: 0.1,
       responseFormat: 'json_object',
+    }
+  );
+
+  return parseAIJson(result);
+}
+
+/** 从图片/PDF文件中解析简历（多模态视觉） */
+export async function parseResumeFromImage(base64Image: string, mimeType: string): Promise<Record<string, unknown>> {
+  const result = await callLLM(
+    `请从这张简历图片中提取结构化信息，输出 JSON。
+
+请提取以下字段（如果简历中不存在则设为 null 或空数组）：
+{
+  "name": "姓名",
+  "phone": "手机号码",
+  "email": "邮箱地址",
+  "education": [{"school": "学校", "degree": "学历", "major": "专业", "startDate": "开始日期", "endDate": "结束日期"}],
+  "experience": [{"company": "公司", "position": "职位", "startDate": "开始日期", "endDate": "结束日期", "description": "工作描述"}],
+  "skills": ["技能1", "技能2"],
+  "certificates": ["证书1"],
+  "projects": [{"name": "项目名", "description": "项目描述"}],
+  "summary": "候选人综合概述（50字以内）",
+  "confidence": 0.95
+}
+
+注意：请仔细阅读简历图片中的文字，精确提取姓名、公司名、学校名、技能等关键信息。不要编造不存在的信息。`,
+    {
+      systemPrompt: '你是一位专业的简历解析专家。请从简历图片中精确提取结构化信息。只返回 JSON，不要任何其他内容。',
+      temperature: 0.1,
+      responseFormat: 'json_object',
+      contentParts: [{
+        type: 'image_url',
+        image_url: {
+          url: `data:${mimeType};base64,${base64Image}`,
+          detail: 'high',
+        },
+      }],
     }
   );
 

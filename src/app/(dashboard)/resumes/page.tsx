@@ -32,7 +32,7 @@ import {
   Mail,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { mockCandidates, mockParsedResume } from '@/lib/mock-data';
+import { mockCandidates } from '@/lib/mock-data';
 import { Modal } from '@/components/ui/modal';
 import { ResumePreviewModal } from '@/components/resume-preview-modal';
 import { AICandidateProfile } from '@/components/ai-candidate-profile';
@@ -46,7 +46,12 @@ export default function ResumesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
-  const [parsedResult, setParsedResult] = useState<typeof mockParsedResume | null>(null);
+  const [parsedResult, setParsedResult] = useState<{
+    name: string; avatar: string; position: string; education: string;
+    school: string; experience: string; company: string; matchScore: number;
+    summary: string; matchedSkills: string[]; uncertainSkills: string[];
+    phone?: string; email?: string;
+  } | null>(null);
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -181,15 +186,38 @@ export default function ResumesPage() {
     { id: 'hired', label: '已入职', count: tabCounts.hired },
   ];
 
+  // Upload file to AI parse API and return parsed result
+  const uploadAndParse = useCallback(async (file: File) => {
+    setIsParsing(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/candidates/parse-resume', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.code === 0 && data.data) {
+        setParsedResult(data.data);
+      } else {
+        alert('简历解析失败：' + (data.message || '未知错误'));
+      }
+    } catch (err) {
+      console.error('Parse error:', err);
+      alert('简历解析失败，请检查网络后重试');
+    } finally {
+      setIsParsing(false);
+    }
+  }, []);
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsUploading(false);
-    setIsParsing(true);
-    setTimeout(() => {
-      setIsParsing(false);
-      setParsedResult(mockParsedResume);
-    }, 2500);
-  }, []);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      uploadAndParse(file);
+    }
+  }, [uploadAndParse]);
 
   const handleFileSelect = useCallback(() => {
     fileInputRef.current?.click();
@@ -199,10 +227,9 @@ export default function ResumesPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check for duplicates first by trying to parse the filename
+    // Check for duplicates first
     setCheckingDuplicate(true);
     try {
-      // Extract potential info from filename for duplicate check
       const fileName = file.name.replace(/\.(pdf|doc|docx|png|jpg|jpeg)$/i, '');
       const res = await fetch('/api/candidates/check-duplicate', {
         method: 'POST',
@@ -225,12 +252,8 @@ export default function ResumesPage() {
     setCheckingDuplicate(false);
 
     // No duplicate found, proceed with parsing
-    setIsParsing(true);
-    setTimeout(() => {
-      setIsParsing(false);
-      setParsedResult(mockParsedResume);
-    }, 2500);
-  }, []);
+    uploadAndParse(file);
+  }, [uploadAndParse]);
 
   // Handle duplicate resolution
   const handleDuplicateAction = useCallback((action: 'skip' | 'overwrite' | 'keep') => {
@@ -239,13 +262,12 @@ export default function ResumesPage() {
       return;
     }
     // For overwrite or keep, proceed with parsing
+    const file = duplicateInfo?.pendingFile;
     setDuplicateInfo(null);
-    setIsParsing(true);
-    setTimeout(() => {
-      setIsParsing(false);
-      setParsedResult(mockParsedResume);
-    }, 2500);
-  }, []);
+    if (file) {
+      uploadAndParse(file);
+    }
+  }, [duplicateInfo?.pendingFile, uploadAndParse]);
 
   const handlePassScreen = useCallback(async (candidateId: string, candidateName: string) => {
     setActionLoading(candidateId);
@@ -723,7 +745,7 @@ export default function ResumesPage() {
                 </div>
                 <div className="flex items-center gap-2 text-slate-400">
                   <Building2 className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                  <span className="truncate">{(parsedResult.workHistory || []).map(w => w.company).join(' → ') || '暂无工作经历'}</span>
+                  <span className="truncate">{parsedResult.company || '暂无工作经历'}</span>
                 </div>
               </div>
               <div className="mt-3 flex items-center gap-2">
@@ -745,7 +767,7 @@ export default function ResumesPage() {
               <div>
                 <p className="text-[11px] md:text-xs font-medium text-slate-400 mb-1.5">AI 摘要</p>
                 <p className="text-[11px] md:text-xs leading-relaxed text-slate-300 bg-[#0a0e1a] rounded-lg p-2.5 md:p-3 border border-[#1e293b]">
-                  {parsedResult.aiSummary}
+                  {parsedResult.summary}
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
@@ -766,7 +788,7 @@ export default function ResumesPage() {
                     <AlertCircle className="h-3 w-3" /> 待确认
                   </p>
                   <div className="flex flex-wrap gap-1">
-                    {parsedResult.unmatchedSkills.map((s) => (
+                    {parsedResult.uncertainSkills.map((s) => (
                       <span key={s} className="rounded-md bg-amber-500/10 px-1.5 md:px-2 py-0.5 text-[10px] md:text-[11px] text-amber-400 border border-amber-500/20">
                         {s}
                       </span>
