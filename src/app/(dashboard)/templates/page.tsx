@@ -51,19 +51,27 @@ export default function TemplatesPage() {
   }, [loadTemplates]);
 
   const handleAdd = async () => {
+    if (!newTemplate.title.trim()) {
+      alert('请输入模板标题');
+      return;
+    }
     try {
       const res = await fetch('/api/position-templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newTemplate),
       });
-      if (res.ok) {
+      const data = await res.json();
+      if (res.ok && data.code === 0) {
         setShowAddModal(false);
         setNewTemplate({ category: 'tech', title: '', description: '', requirements: '', industry: '' });
         loadTemplates();
+      } else {
+        alert(data.message || '创建模板失败，请重试');
       }
     } catch (e) {
       console.error('Add template error:', e);
+      alert('网络错误，创建模板失败');
     }
   };
 
