@@ -1,13 +1,16 @@
 import { prisma } from '@/lib/prisma';
 
 // ============================================================
-// Agnes AI 默认配置（免费开放，OpenAI 兼容协议）
+// 默认 AI 配置（Agnes 免费优先，DeepSeek 需用户自行配置 API Key）
 // ============================================================
-const AGNES_DEFAULT = {
+const DEFAULT_CONFIG = {
   provider: 'agnes',
   baseUrl: 'https://apihub.agnes-ai.com/v1',
   model: 'agnes-2.0-flash',
 } as const;
+
+// 不支持 vision（多模态图片理解）的 provider 列表
+const NO_VISION_PROVIDERS = new Set(['deepseek']);
 
 interface AIConfig {
   provider: string;
@@ -17,7 +20,7 @@ interface AIConfig {
 }
 
 // ============================================================
-// 获取 AI 配置（优先数据库自定义 → 回退 Agnes 默认）
+// 获取 AI 配置（优先数据库自定义 → 回退默认）
 // ============================================================
 export async function getAIConfig(): Promise<AIConfig> {
   try {
@@ -27,13 +30,13 @@ export async function getAIConfig(): Promise<AIConfig> {
 
     if (config) {
       const value = JSON.parse(config.value) as Record<string, string>;
-      // 如果用户配置了自定义 AI（如 Kimi 开放平台），使用自定义配置
+      // 如果用户配置了自定义 AI，使用自定义配置
       if (value.provider && value.provider !== 'mock' && value.apiKey) {
         return {
           provider: value.provider,
           apiKey: value.apiKey,
-          model: value.model || AGNES_DEFAULT.model,
-          baseUrl: value.baseUrl || AGNES_DEFAULT.baseUrl,
+          model: value.model || DEFAULT_CONFIG.model,
+          baseUrl: value.baseUrl || DEFAULT_CONFIG.baseUrl,
         };
       }
     }
@@ -41,14 +44,20 @@ export async function getAIConfig(): Promise<AIConfig> {
     // 数据库读取失败，使用默认配置
   }
 
-  // 使用 Agnes AI 默认配置（环境变量优先）
-  const apiKey = process.env.AGNES_API_KEY || '';
+  // 使用默认配置（环境变量优先）
+  const apiKey = process.env.DEEPSEEK_API_KEY || process.env.AGNES_API_KEY || '';
   return {
-    provider: AGNES_DEFAULT.provider,
+    provider: DEFAULT_CONFIG.provider,
     apiKey,
-    model: AGNES_DEFAULT.model,
-    baseUrl: AGNES_DEFAULT.baseUrl,
+    model: DEFAULT_CONFIG.model,
+    baseUrl: DEFAULT_CONFIG.baseUrl,
   };
+}
+
+/** 检查当前 AI 是否支持 vision（多模态图片理解） */
+export async function supportsVision(): Promise<boolean> {
+  const config = await getAIConfig();
+  return !NO_VISION_PROVIDERS.has(config.provider);
 }
 
 // ============================================================
@@ -96,6 +105,11 @@ export async function callLLM(
       temperature: options.temperature ?? 0.1,
       max_tokens: options.maxTokens ?? 4096,
     };
+
+    // DeepSeek v4 默认开启思考模式，需要显式禁用以获取干净输出
+    if (config.provider === 'deepseek') {
+      body.thinking = { type: 'disabled' };
+    }
 
     // JSON 模式
     if (options.responseFormat === 'json_object') {
@@ -175,6 +189,7 @@ export async function* callLLMStream(
         temperature: options.temperature ?? 0.1,
         max_tokens: options.maxTokens ?? 4096,
         stream: true,
+        ...(config.provider === 'deepseek' ? { thinking: { type: 'disabled' } } : {}),
       }),
     });
 

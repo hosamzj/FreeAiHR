@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { success, error } from '@/lib/auth';
-import { parseResume, parseResumeFromImage } from '@/lib/ai';
+import { parseResume, parseResumeFromImage, supportsVision } from '@/lib/ai';
 import { S3Storage } from 'coze-coding-dev-sdk';
 import mammoth from 'mammoth';
 
@@ -126,6 +126,11 @@ export async function POST(request: NextRequest) {
       let aiParsed: Record<string, unknown>;
 
       if (mimeType.startsWith('image/')) {
+        // 检查当前 AI 是否支持 vision（多模态图片理解）
+        const hasVision = await supportsVision();
+        if (!hasVision) {
+          return error(422, '当前 AI 服务商（DeepSeek）不支持图片直接解析。请上传 PDF 或 Word 格式的简历，或在系统设置中切换到支持多模态的 AI 服务商（如 Agnes AI、OpenAI）。');
+        }
         const base64 = buffer.toString('base64');
         aiParsed = await parseResumeFromImage(base64, mimeType);
       } else if (mimeType === 'application/pdf') {
@@ -140,7 +145,11 @@ export async function POST(request: NextRequest) {
         if (hasText) {
           aiParsed = await parseResume(pdfText);
         } else {
-          // PDF 无文本层（扫描件/图片PDF），用多模态 AI
+          // PDF 无文本层（扫描件/图片PDF），需要多模态 AI
+          const hasVision = await supportsVision();
+          if (!hasVision) {
+            return error(422, '该 PDF 为扫描件（无可提取文本），当前 AI 服务商不支持图片解析。请上传可复制文本的 PDF 或 Word 简历。');
+          }
           const base64 = buffer.toString('base64');
           aiParsed = await parseResumeFromImage(base64, 'image/png');
         }

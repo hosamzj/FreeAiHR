@@ -17,8 +17,8 @@ const AI_PROVIDERS: Record<string, {
   },
   deepseek: {
     name: 'DeepSeek',
-    baseUrl: 'https://api.deepseek.com/v1',
-    defaultModel: 'deepseek-chat',
+    baseUrl: 'https://api.deepseek.com',
+    defaultModel: 'deepseek-v4-flash',
   },
   openai: {
     name: 'OpenAI',
