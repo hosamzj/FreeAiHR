@@ -33,6 +33,7 @@ export default function TemplatesPage() {
   const [showAIModal, setShowAIModal] = useState(false);
   const [newTemplate, setNewTemplate] = useState({ category: 'tech', title: '', description: '', requirements: '', industry: '' });
   const [aiPrompt, setAiPrompt] = useState('');
+  const [aiIndustry, setAiIndustry] = useState('互联网/IT');
 
   const loadTemplates = useCallback(async () => {
     try {
@@ -82,7 +83,7 @@ export default function TemplatesPage() {
       const res = await fetch('/api/ai/generate-jd', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ positionName: aiPrompt, department: '' }),
+        body: JSON.stringify({ positionName: aiPrompt, department: '', industry: aiIndustry }),
       });
       const data = await res.json();
       if (data.data) {
@@ -267,9 +268,21 @@ export default function TemplatesPage() {
               placeholder="例如：高级前端工程师，负责核心业务系统的前端架构设计和开发..."
             />
           </div>
+          <div>
+            <label className="text-sm text-slate-400">行业类型</label>
+            <select
+              value={aiIndustry}
+              onChange={e => setAiIndustry(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
+            >
+              {['互联网/IT','金融','电商','教育','医疗','制造','房地产','物流','能源','广告/传媒','游戏','AI/人工智能','SaaS/企业服务','汽车','消费品/零售'].map(i => (
+                <option key={i} value={i}>{i}</option>
+              ))}
+            </select>
+          </div>
           <div className="flex items-center gap-2 rounded-lg bg-sky-500/10 p-3">
             <Sparkles className="h-4 w-4 text-sky-400" />
-            <span className="text-xs text-sky-400">AI将根据描述自动生成岗位职责和任职要求</span>
+            <span className="text-xs text-sky-400">AI将根据岗位描述和行业类型自动生成岗位职责和任职要求</span>
           </div>
           <button
             onClick={handleAIGenerate}
