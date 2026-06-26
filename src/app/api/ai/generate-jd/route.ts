@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
     await requireAuth();
 
     const body = await request.json();
-    const { positionName, department, experience, salaryRange, skills } = body;
+    const { positionName, department, experience, salaryRange, skills, industry } = body;
 
     if (!positionName) {
       return error(422, '请输入岗位名称');
@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
     const prompt = `请为以下职位生成一份完整的职位描述(JD)：
 
 职位名称：${positionName}
+所属行业：${industry || '未指定'}
 所属部门：${department || '未指定'}
 工作经验要求：${experience || '不限'}
 薪资范围：${salaryRange ? `${salaryRange.min}K-${salaryRange.max}K` : '面议'}

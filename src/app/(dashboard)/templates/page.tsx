@@ -22,19 +22,30 @@ interface Category {
   sortOrder: number;
 }
 
+interface Industry {
+  id: string;
+  name: string;
+  sortOrder: number;
+}
+
 export default function TemplatesPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [industries, setIndustries] = useState<Industry[]>([]);
   const [loading, setLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [industryFilter, setIndustryFilter] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
   const [showEditCatModal, setShowEditCatModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editCatName, setEditCatName] = useState('');
   const [newCatName, setNewCatName] = useState('');
+  const [newIndustryName, setNewIndustryName] = useState('');
+  const [editingIndustry, setEditingIndustry] = useState<Industry | null>(null);
+  const [editIndustryName, setEditIndustryName] = useState('');
   const [newTemplate, setNewTemplate] = useState({ category: '', title: '', description: '', requirements: '', industry: '' });
-  const [aiPrompt, setAiPrompt] = useState({ positionName: '', department: '', experience: '', skills: '', category: '' });
+  const [aiPrompt, setAiPrompt] = useState({ positionName: '', department: '', experience: '', skills: '', category: '', industry: '' });
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiResult, setAiResult] = useState<{ responsibilities: string[]; requirements: string[]; preferred: string[]; benefits: string[] } | null>(null);
   const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
@@ -54,20 +65,33 @@ export default function TemplatesPage() {
     }
   }, []);
 
+  const loadIndustries = useCallback(async () => {
+    try {
+      const res = await fetch('/api/industries');
+      const data = await res.json();
+      if (data.code === 0) {
+        setIndustries(data.data || []);
+      }
+    } catch (e) {
+      console.error('Load industries error:', e);
+    }
+  }, []);
+
   const loadTemplates = useCallback(async () => {
     try {
       const params = new URLSearchParams();
       if (categoryFilter) params.set('category', categoryFilter);
+      if (industryFilter) params.set('industry', industryFilter);
       const res = await fetch(`/api/position-templates?${params}`);
       const data = await res.json();
       setTemplates(data.data || []);
     } catch (e) {
       console.error('Load templates error:', e);
     }
-  }, [categoryFilter]);
+  }, [categoryFilter, industryFilter]);
 
   useEffect(() => {
-    Promise.all([loadCategories(), loadTemplates()]).finally(() => setLoading(false));
+    Promise.all([loadCategories(), loadIndustries(), loadTemplates()]).finally(() => setLoading(false));
   }, [loadTemplates]);
 
   const handleAdd = async () => {
@@ -125,6 +149,7 @@ export default function TemplatesPage() {
           positionName: aiPrompt.positionName,
           department: aiPrompt.department,
           experience: aiPrompt.experience,
+          industry: aiPrompt.industry,
           skills: aiPrompt.skills.split(/[,，、]/).map(s => s.trim()).filter(Boolean),
         }),
       });
@@ -161,7 +186,7 @@ export default function TemplatesPage() {
           title: aiPrompt.positionName,
           description: aiResult.responsibilities.join('\n'),
           requirements: aiResult.requirements,
-          industry: aiPrompt.department || '',
+          industry: aiPrompt.industry || '',
         }),
       });
       const data = await res.json();
@@ -169,7 +194,7 @@ export default function TemplatesPage() {
         alert('已导入模板库');
         setShowAIModal(false);
         setAiResult(null);
-        setAiPrompt({ positionName: '', department: '', experience: '', skills: '', category: '' });
+        setAiPrompt({ positionName: '', department: '', experience: '', skills: '', category: '', industry: '' });
         loadTemplates();
       } else {
         alert(data.message || '导入失败');
@@ -242,6 +267,68 @@ export default function TemplatesPage() {
     }
   };
 
+  // Industry management
+  const handleAddIndustry = async () => {
+    if (!newIndustryName.trim()) {
+      alert('请输入行业名称');
+      return;
+    }
+    try {
+      const res = await fetch('/api/industries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newIndustryName.trim(), sortOrder: industries.length + 1 }),
+      });
+      const data = await res.json();
+      if (res.ok && data.code === 0) {
+        setNewIndustryName('');
+        loadIndustries();
+      } else {
+        alert(data.message || '添加失败');
+      }
+    } catch (e) {
+      console.error('Add industry error:', e);
+    }
+  };
+
+  const handleEditIndustry = async () => {
+    if (!editingIndustry || !editIndustryName.trim()) return;
+    try {
+      const res = await fetch('/api/industries', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editingIndustry.id, name: editIndustryName.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok && data.code === 0) {
+        setEditingIndustry(null);
+        setEditIndustryName('');
+        loadIndustries();
+        loadTemplates();
+      } else {
+        alert(data.message || '更新失败');
+      }
+    } catch (e) {
+      console.error('Edit industry error:', e);
+    }
+  };
+
+  const handleDeleteIndustry = async (ind: Industry) => {
+    if (!confirm(`确定删除行业"${ind.name}"？`)) return;
+    try {
+      const res = await fetch(`/api/industries?id=${ind.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok && data.code === 0) {
+        if (industryFilter === ind.name) setIndustryFilter('');
+        loadIndustries();
+      } else {
+        alert(data.message || '删除失败');
+      }
+    } catch (e) {
+      console.error('Delete industry error:', e);
+    }
+  };
+
   const getCategoryLabel = (cat: string) => categories.find(c => c.name === cat)?.name || cat;
 
   if (loading) {
@@ -264,7 +351,7 @@ export default function TemplatesPage() {
           <button
             onClick={() => {
               setAiResult(null);
-              setAiPrompt({ positionName: '', department: '', experience: '', skills: '', category: categories[0]?.name || '' });
+              setAiPrompt({ positionName: '', department: '', experience: '', skills: '', category: categories[0]?.name || '', industry: industries[0]?.name || '' });
               setShowAIModal(true);
             }}
             className="flex items-center gap-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-4 py-2 text-sm font-medium text-sky-400 hover:bg-sky-500/20"
@@ -354,6 +441,76 @@ export default function TemplatesPage() {
         </div>
       )}
 
+      {/* Industry Filter with Edit */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-slate-500 mr-1">行业：</span>
+        <button
+          onClick={() => setIndustryFilter('')}
+          className={`rounded-lg px-3 py-1.5 text-xs ${!industryFilter ? 'bg-orange-500 text-white' : 'bg-[#111827] text-slate-400 hover:text-white'}`}
+        >
+          全部
+        </button>
+        {industries.map(ind => (
+          <div key={ind.id} className="group relative flex items-center">
+            <button
+              onClick={() => setIndustryFilter(ind.name)}
+              className={`rounded-lg px-3 py-1.5 text-xs ${industryFilter === ind.name ? 'bg-orange-500 text-white' : 'bg-[#111827] text-slate-400 hover:text-white'}`}
+            >
+              {ind.name}
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); setEditingIndustry(ind); setEditIndustryName(ind.name); }}
+              className="absolute -right-1 -top-1 hidden group-hover:flex h-4 w-4 items-center justify-center rounded-full bg-slate-700 text-slate-300 hover:bg-orange-500 hover:text-white"
+              title="编辑行业"
+            >
+              <Pencil className="h-2.5 w-2.5" />
+            </button>
+          </div>
+        ))}
+        {/* Add industry button */}
+        <div className="relative flex items-center">
+          {newIndustryName !== '' ? (
+            <div className="flex items-center gap-1">
+              <input
+                value={newIndustryName}
+                onChange={e => setNewIndustryName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleAddIndustry(); if (e.key === 'Escape') setNewIndustryName(''); }}
+                className="w-20 rounded-lg border border-orange-500/50 bg-[#0a0e1a] px-2 py-1 text-xs text-white focus:outline-none"
+                placeholder="行业名"
+                autoFocus
+              />
+              <button onClick={handleAddIndustry} className="rounded p-0.5 text-emerald-400 hover:bg-emerald-500/10"><Check className="h-3.5 w-3.5" /></button>
+              <button onClick={() => setNewIndustryName('')} className="rounded p-0.5 text-slate-500 hover:text-white"><X className="h-3.5 w-3.5" /></button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setNewIndustryName(' ')}
+              className="flex items-center gap-1 rounded-lg border border-dashed border-slate-600 px-2 py-1.5 text-xs text-slate-500 hover:border-orange-500/50 hover:text-orange-400"
+            >
+              <Plus className="h-3 w-3" />
+              自定义
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Edit Industry Inline */}
+      {editingIndustry && (
+        <div className="flex items-center gap-2 rounded-lg border border-orange-500/30 bg-orange-500/5 px-3 py-2">
+          <span className="text-xs text-slate-400">编辑行业：</span>
+          <input
+            value={editIndustryName}
+            onChange={e => setEditIndustryName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleEditIndustry(); if (e.key === 'Escape') setEditingIndustry(null); }}
+            className="w-32 rounded border border-[#1e293b] bg-[#0a0e1a] px-2 py-1 text-sm text-white focus:outline-none focus:border-orange-500"
+            autoFocus
+          />
+          <button onClick={handleEditIndustry} className="rounded p-1 text-emerald-400 hover:bg-emerald-500/10"><Check className="h-4 w-4" /></button>
+          <button onClick={() => setEditingIndustry(null)} className="rounded p-1 text-slate-500 hover:text-white"><X className="h-4 w-4" /></button>
+          <button onClick={() => handleDeleteIndustry(editingIndustry)} className="ml-auto rounded p-1 text-slate-500 hover:text-red-400" title="删除行业"><Trash2 className="h-4 w-4" /></button>
+        </div>
+      )}
+
       {/* Templates Grid */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {templates.length === 0 ? (
@@ -414,13 +571,14 @@ export default function TemplatesPage() {
             </div>
             <div>
               <label className="text-sm text-slate-400">行业</label>
-              <input
-                type="text"
+              <select
                 value={newTemplate.industry}
                 onChange={e => setNewTemplate({ ...newTemplate, industry: e.target.value })}
                 className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
-                placeholder="互联网/金融/制造..."
-              />
+              >
+                <option value="">请选择</option>
+                {industries.map(ind => <option key={ind.id} value={ind.name}>{ind.name}</option>)}
+              </select>
             </div>
           </div>
           <div>
@@ -473,6 +631,17 @@ export default function TemplatesPage() {
                 >
                   <option value="">请选择</option>
                   {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm text-slate-400">所属行业</label>
+                <select
+                  value={aiPrompt.industry}
+                  onChange={e => setAiPrompt({ ...aiPrompt, industry: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
+                >
+                  <option value="">请选择</option>
+                  {industries.map(ind => <option key={ind.id} value={ind.name}>{ind.name}</option>)}
                 </select>
               </div>
               <div>
