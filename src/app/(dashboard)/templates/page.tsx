@@ -18,22 +18,9 @@ interface Template {
   status: string;
 }
 
-const CATEGORIES = [
-  { value: 'tech', label: '技术' },
-  { value: 'product', label: '产品' },
-  { value: 'design', label: '设计' },
-  { value: 'operations', label: '运营' },
-  { value: 'sales', label: '销售' },
-  { value: 'management', label: '管理' },
-];
+interface DictItem { id: string; groupKey: string; value: string; sortOrder: number; enabled: boolean; }
 
-const INDUSTRIES = [
-  '互联网/IT', '金融/保险', '电商/零售', '教育/培训', '医疗/健康',
-  '制造/工业', '房地产/建筑', '物流/交通', '能源/环保', '广告/传媒',
-  '游戏/娱乐', '人工智能/AI', '企业服务/SaaS', '汽车/出行', '消费/生活服务',
-];
-
-const emptyTemplate = { category: 'tech', title: '', department: '', description: '', requirements: '', industry: '' };
+const emptyTemplate = { category: '', title: '', department: '', description: '', requirements: '', industry: '' };
 
 export default function TemplatesPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -45,6 +32,28 @@ export default function TemplatesPage() {
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
   const [newTemplate, setNewTemplate] = useState(emptyTemplate);
   const [saving, setSaving] = useState(false);
+
+  // Dynamic dropdown options from dictionary
+  const [categories, setCategories] = useState<DictItem[]>([]);
+  const [industries, setIndustries] = useState<DictItem[]>([]);
+  const [departments, setDepartments] = useState<DictItem[]>([]);
+
+  // Load dictionary options
+  useEffect(() => {
+    const loadDict = async (groupKey: string) => {
+      try {
+        const res = await fetch(`/api/system/dictionary?groupKey=${groupKey}`);
+        const data = await res.json();
+        if (data.code === 0) return data.data as DictItem[];
+      } catch (e) { console.error(`Load ${groupKey} error:`, e); }
+      return [];
+    };
+    Promise.all([
+      loadDict('category').then(setCategories),
+      loadDict('industry').then(setIndustries),
+      loadDict('department').then(setDepartments),
+    ]);
+  }, []);
 
   const loadTemplates = useCallback(async () => {
     try {
@@ -162,7 +171,7 @@ export default function TemplatesPage() {
     setShowEditModal(true);
   };
 
-  const getCategoryLabel = (cat: string) => CATEGORIES.find(c => c.value === cat)?.label || cat;
+  const getCategoryLabel = (cat: string) => categories.find(c => c.value === cat)?.value || cat;
 
   if (loading) {
     return (
@@ -206,13 +215,13 @@ export default function TemplatesPage() {
         >
           全部
         </button>
-        {CATEGORIES.map(cat => (
+        {categories.map(cat => (
           <button
-            key={cat.value}
+            key={cat.id}
             onClick={() => setCategoryFilter(cat.value)}
             className={`rounded-lg px-3 py-1.5 text-sm ${categoryFilter === cat.value ? 'bg-sky-500 text-white' : 'bg-[#111827] text-slate-400 hover:text-white'}`}
           >
-            {cat.label}
+            {cat.value}
           </button>
         ))}
       </div>
@@ -289,23 +298,26 @@ export default function TemplatesPage() {
                 value={newTemplate.category}
                 onChange={e => setNewTemplate({ ...newTemplate, category: e.target.value })}
                 className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
-                placeholder="如：技术、产品、设计..."
+                placeholder="如：技术研发、产品设计..."
                 list="category-suggestions-add"
               />
               <datalist id="category-suggestions-add">
-                {CATEGORIES.map(c => <option key={c.value} value={c.label} />)}
+                {categories.map(c => <option key={c.id} value={c.value} />)}
               </datalist>
             </div>
             <div>
               <label className="text-sm text-slate-400">行业类型</label>
-              <select
+              <input
+                type="text"
                 value={newTemplate.industry}
                 onChange={e => setNewTemplate({ ...newTemplate, industry: e.target.value })}
                 className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
-              >
-                <option value="">请选择行业</option>
-                {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
-              </select>
+                placeholder="请选择或输入行业"
+                list="industry-suggestions-add"
+              />
+              <datalist id="industry-suggestions-add">
+                {industries.map(i => <option key={i.id} value={i.value} />)}
+              </datalist>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -326,7 +338,11 @@ export default function TemplatesPage() {
                 onChange={e => setNewTemplate({ ...newTemplate, department: e.target.value })}
                 className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
                 placeholder="如：技术部"
+                list="department-suggestions-add"
               />
+              <datalist id="department-suggestions-add">
+                {departments.map(d => <option key={d.id} value={d.value} />)}
+              </datalist>
             </div>
           </div>
           <div>
@@ -369,23 +385,26 @@ export default function TemplatesPage() {
                   value={editingTemplate.category}
                   onChange={e => setEditingTemplate({ ...editingTemplate, category: e.target.value })}
                   className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
-                  placeholder="如：技术、产品、设计..."
+                  placeholder="如：技术研发、产品设计..."
                   list="category-suggestions-edit"
                 />
                 <datalist id="category-suggestions-edit">
-                  {CATEGORIES.map(c => <option key={c.value} value={c.label} />)}
+                  {categories.map(c => <option key={c.id} value={c.value} />)}
                 </datalist>
               </div>
               <div>
                 <label className="text-sm text-slate-400">行业类型</label>
-                <select
+                <input
+                  type="text"
                   value={editingTemplate.industry || ''}
                   onChange={e => setEditingTemplate({ ...editingTemplate, industry: e.target.value })}
                   className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
-                >
-                  <option value="">请选择行业</option>
-                  {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
-                </select>
+                  placeholder="请选择或输入行业"
+                  list="industry-suggestions-edit"
+                />
+                <datalist id="industry-suggestions-edit">
+                  {industries.map(i => <option key={i.id} value={i.value} />)}
+                </datalist>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -406,7 +425,11 @@ export default function TemplatesPage() {
                   onChange={e => setEditingTemplate({ ...editingTemplate, department: e.target.value })}
                   className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
                   placeholder="如：技术部"
+                  list="department-suggestions-edit"
                 />
+                <datalist id="department-suggestions-edit">
+                  {departments.map(d => <option key={d.id} value={d.value} />)}
+                </datalist>
               </div>
             </div>
             <div>

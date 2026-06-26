@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sparkles, Loader2, X, Copy, Check, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Modal } from '@/components/ui/modal';
@@ -33,6 +33,19 @@ export function AIJDModal({ isOpen, onClose, onGenerate }: AIJDModalProps) {
   });
   const [result, setResult] = useState<JDResult | null>(null);
   const [copied, setCopied] = useState(false);
+  const [industries, setIndustries] = useState<{ id: string; value: string }[]>([]);
+  const [departments, setDepartments] = useState<{ id: string; value: string }[]>([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetch('/api/system/dictionary?groupKey=industry')
+        .then(r => r.json())
+        .then(d => { if (d.code === 0) setIndustries(d.data); });
+      fetch('/api/system/dictionary?groupKey=department')
+        .then(r => r.json())
+        .then(d => { if (d.code === 0) setDepartments(d.data); });
+    }
+  }, [isOpen]);
 
   const handleGenerate = async () => {
     if (!form.positionName) return;
@@ -115,33 +128,25 @@ export function AIJDModal({ isOpen, onClose, onGenerate }: AIJDModalProps) {
                 value={form.department}
                 onChange={(e) => setForm({ ...form, department: e.target.value })}
                 placeholder="如：技术部"
+                list="ai-dept-suggestions"
                 className="w-full px-3 py-2 bg-[#0a0e1a] border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
               />
+              <datalist id="ai-dept-suggestions">
+                {departments.map(d => <option key={d.id} value={d.value} />)}
+              </datalist>
             </div>
             <div>
               <label className="block text-sm text-slate-300 mb-1">行业类型 *</label>
-              <select
+              <input
                 value={form.industry}
                 onChange={(e) => setForm({ ...form, industry: e.target.value })}
-                className="w-full px-3 py-2 bg-[#0a0e1a] border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500"
-              >
-                <option value="">请选择行业</option>
-                <option value="互联网/IT">互联网/IT</option>
-                <option value="金融/保险">金融/保险</option>
-                <option value="电商/零售">电商/零售</option>
-                <option value="教育/培训">教育/培训</option>
-                <option value="医疗/健康">医疗/健康</option>
-                <option value="制造/工业">制造/工业</option>
-                <option value="房地产/建筑">房地产/建筑</option>
-                <option value="物流/交通">物流/交通</option>
-                <option value="能源/环保">能源/环保</option>
-                <option value="广告/传媒">广告/传媒</option>
-                <option value="游戏/娱乐">游戏/娱乐</option>
-                <option value="人工智能/AI">人工智能/AI</option>
-                <option value="企业服务/SaaS">企业服务/SaaS</option>
-                <option value="汽车/出行">汽车/出行</option>
-                <option value="消费/生活服务">消费/生活服务</option>
-              </select>
+                placeholder="请选择或输入行业"
+                list="ai-industry-suggestions"
+                className="w-full px-3 py-2 bg-[#0a0e1a] border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+              />
+              <datalist id="ai-industry-suggestions">
+                {industries.map(i => <option key={i.id} value={i.value} />)}
+              </datalist>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">

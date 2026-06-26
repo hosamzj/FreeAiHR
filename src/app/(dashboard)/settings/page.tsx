@@ -4,11 +4,11 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import {
   Settings, Shield, Key, Building2, Save, Loader2, Check, X,
-  Globe, Lock, Mail, Download, Bot, AlertTriangle, Video, Plus, GripVertical, Trash2, Edit2,
+  Globe, Lock, Mail, Download, Bot, AlertTriangle, Video, Plus, GripVertical, Trash2, Edit2, Database,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type TabId = 'sso' | 'password' | 'general' | 'collection' | 'interview_methods' | 'ai' | 'email_templates';
+type TabId = 'sso' | 'password' | 'general' | 'collection' | 'interview_methods' | 'ai' | 'email_templates' | 'dictionary';
 
 interface SSOCfg {
   enabled: boolean;
@@ -127,6 +127,21 @@ export default function SettingsPage() {
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [seedingTemplates, setSeedingTemplates] = useState(false);
 
+  // Dictionary state
+  interface DictItem {
+    id: string;
+    groupKey: string;
+    value: string;
+    sortOrder: number;
+    enabled: boolean;
+  }
+  const [dictItems, setDictItems] = useState<DictItem[]>([]);
+  const [dictGroupKey, setDictGroupKey] = useState('category');
+  const [newDictValue, setNewDictValue] = useState('');
+  const [editingDictId, setEditingDictId] = useState<string | null>(null);
+  const [editingDictValue, setEditingDictValue] = useState('');
+  const [loadingDict, setLoadingDict] = useState(false);
+
   useEffect(() => {
     if (user?.role !== 'admin') return;
     fetch('/api/system/sso').then(r => r.json()).then(d => { if (d.code === 0) setSso(d.data); });
@@ -138,8 +153,19 @@ export default function SettingsPage() {
     fetchAIConfig();
     // Fetch email templates
     fetchEmailTemplates();
+    fetchDictItems();
     // Collection config is stored locally for now
   }, [user]);
+
+  const fetchDictItems = async () => {
+    setLoadingDict(true);
+    try {
+      const res = await fetch(`/api/system/dictionary?groupKey=${dictGroupKey}`);
+      const data = await res.json();
+      if (data.code === 0) setDictItems(data.data);
+    } catch (e) { console.error('Fetch dict error:', e); }
+    finally { setLoadingDict(false); }
+  };
 
   const fetchAIConfig = async () => {
     try {
@@ -352,6 +378,61 @@ export default function SettingsPage() {
     }
   };
 
+  // Dictionary CRUD
+  const handleAddDictItem = async () => {
+    if (!newDictValue.trim()) return;
+    try {
+      const res = await fetch('/api/system/dictionary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupKey: dictGroupKey, value: newDictValue.trim(), sortOrder: dictItems.length }),
+      });
+      const data = await res.json();
+      if (data.code === 0) {
+        setDictItems([...dictItems, data.data]);
+        setNewDictValue('');
+      }
+    } catch (e) { console.error('Add dict error:', e); }
+  };
+
+  const handleUpdateDictItem = async (id: string) => {
+    if (!editingDictValue.trim()) return;
+    try {
+      const res = await fetch('/api/system/dictionary', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, value: editingDictValue.trim() }),
+      });
+      const data = await res.json();
+      if (data.code === 0) {
+        setDictItems(dictItems.map(d => d.id === id ? data.data : d));
+        setEditingDictId(null);
+        setEditingDictValue('');
+      }
+    } catch (e) { console.error('Update dict error:', e); }
+  };
+
+  const handleDeleteDictItem = async (id: string) => {
+    try {
+      const res = await fetch(`/api/system/dictionary?id=${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.code === 0) {
+        setDictItems(dictItems.filter(d => d.id !== id));
+      }
+    } catch (e) { console.error('Delete dict error:', e); }
+  };
+
+  const handleDictGroupChange = (groupKey: string) => {
+    setDictGroupKey(groupKey);
+    // fetch will be triggered by the useEffect below or we can trigger manually
+    // We need to fetch after state update
+    setTimeout(() => {
+      fetch(`/api/system/dictionary?groupKey=${groupKey}`)
+        .then(r => r.json())
+        .then(d => { if (d.code === 0) setDictItems(d.data); });
+    }, 0);
+  };
+
   if (user?.role !== 'admin') {
     return (
       <div className="flex items-center justify-center h-64">
@@ -368,6 +449,7 @@ export default function SettingsPage() {
     { id: 'interview_methods' as TabId, label: '面试方式', icon: Video },
     { id: 'ai' as TabId, label: 'AI配置', icon: Bot },
     { id: 'email_templates' as TabId, label: '邮件模板', icon: Mail },
+    { id: 'dictionary' as TabId, label: '基础数据', icon: Database },
   ];
 
   return (
@@ -1066,6 +1148,115 @@ export default function SettingsPage() {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Dictionary - 基础数据 */}
+      {activeTab === 'dictionary' && (
+        <div className="bg-[#111827] border border-slate-800 rounded-xl p-6 space-y-5">
+          <div>
+            <h3 className="text-lg font-medium text-white flex items-center gap-2">
+              <Database className="w-5 h-5 text-sky-400" />
+              基础数据管理
+            </h3>
+            <p className="text-sm text-slate-400 mt-1">统一管理岗位类型、行业类型、所属部门等下拉选项，全局生效</p>
+          </div>
+
+          {/* Group selector */}
+          <div className="flex gap-2">
+            {[
+              { key: 'category', label: '岗位类型' },
+              { key: 'industry', label: '行业类型' },
+              { key: 'department', label: '所属部门' },
+            ].map(g => (
+              <button
+                key={g.key}
+                onClick={() => handleDictGroupChange(g.key)}
+                className={cn(
+                  'px-4 py-2 text-sm rounded-lg transition-colors',
+                  dictGroupKey === g.key ? 'bg-sky-500/10 text-sky-400 border border-sky-500/30' : 'text-slate-400 hover:text-slate-200 border border-slate-700'
+                )}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Add new */}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newDictValue}
+              onChange={(e) => setNewDictValue(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddDictItem()}
+              placeholder={`输入新${dictGroupKey === 'category' ? '岗位类型' : dictGroupKey === 'industry' ? '行业类型' : '部门'}名称...`}
+              className="flex-1 px-3 py-2 bg-[#0a0e1a] border border-slate-700 rounded-lg text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-sky-500/50"
+            />
+            <button
+              onClick={handleAddDictItem}
+              disabled={!newDictValue.trim()}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-sky-500 hover:bg-sky-400 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+            >
+              <Plus className="w-4 h-4" />
+              添加
+            </button>
+          </div>
+
+          {/* List */}
+          {loadingDict ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-sky-400" />
+            </div>
+          ) : dictItems.length === 0 ? (
+            <div className="text-center py-8 text-slate-400">
+              <Database className="w-12 h-12 mx-auto mb-3 opacity-30" />
+              <p>暂无数据</p>
+              <p className="text-xs mt-1">在上方输入框中添加新条目</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {dictItems.map((item) => (
+                <div key={item.id} className="flex items-center justify-between p-3 bg-[#0a0e1a] border border-slate-700 rounded-lg">
+                  {editingDictId === item.id ? (
+                    <div className="flex-1 flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={editingDictValue}
+                        onChange={(e) => setEditingDictValue(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleUpdateDictItem(item.id)}
+                        className="flex-1 px-3 py-1.5 bg-[#111827] border border-sky-500/50 rounded text-sm text-white focus:outline-none"
+                        autoFocus
+                      />
+                      <button onClick={() => handleUpdateDictItem(item.id)} className="p-1.5 text-green-400 hover:bg-green-500/10 rounded transition-colors">
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => { setEditingDictId(null); setEditingDictValue(''); }} className="p-1.5 text-slate-400 hover:text-white rounded transition-colors">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="text-sm text-slate-200">{item.value}</span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => { setEditingDictId(item.id); setEditingDictValue(item.value); }}
+                          className="p-1.5 text-slate-400 hover:text-sky-400 hover:bg-sky-500/10 rounded transition-colors"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteDictItem(item.id)}
+                          className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
