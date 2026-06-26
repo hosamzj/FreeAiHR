@@ -4,6 +4,21 @@ import { parseResume, parseResumeFromImage } from '@/lib/ai';
 import { S3Storage } from 'coze-coding-dev-sdk';
 import mammoth from 'mammoth';
 
+// Lazy-load pdfjs-dist (ESM only, can't be imported at top level in Next.js edge)
+async function extractPdfText(buffer: Buffer): Promise<string> {
+  const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
+  const pdf = await loadingTask.promise;
+  const pages: string[] = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const text = content.items.map((item: any) => ('str' in item ? item.str : '')).join(' ');
+    pages.push(text);
+  }
+  return pages.join('\n');
+}
+
 const storage = new S3Storage({
   endpointUrl: process.env.COZE_BUCKET_ENDPOINT_URL,
   accessKey: '',
@@ -114,11 +129,18 @@ export async function POST(request: NextRequest) {
         const base64 = buffer.toString('base64');
         aiParsed = await parseResumeFromImage(base64, mimeType);
       } else if (mimeType === 'application/pdf') {
-        const text = buffer.toString('utf-8');
-        const hasText = text.replace(/[^a-zA-Z\u4e00-\u9fff]/g, '').length > 100;
+        // 用 pdfjs-dist 提取 PDF 文本
+        let pdfText = '';
+        try {
+          pdfText = await extractPdfText(buffer);
+        } catch (pdfErr) {
+          console.error('[Resume] PDF text extraction failed:', pdfErr);
+        }
+        const hasText = pdfText.replace(/[^a-zA-Z\u4e00-\u9fff]/g, '').length > 50;
         if (hasText) {
-          aiParsed = await parseResume(text);
+          aiParsed = await parseResume(pdfText);
         } else {
+          // PDF 无文本层（扫描件/图片PDF），用多模态 AI
           const base64 = buffer.toString('base64');
           aiParsed = await parseResumeFromImage(base64, 'image/png');
         }

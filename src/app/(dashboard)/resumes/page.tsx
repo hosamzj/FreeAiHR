@@ -839,7 +839,7 @@ export default function ResumesPage() {
                           appliedPosition: parsedResult.position,
                           matchScore: parsedResult.matchScore,
                           resumeFileKey: parsedResult.resumeFileKey || '',
-                          resumeParsed: JSON.stringify(parsedResult),
+                          resumeParsed: parsedResult,
                           source: 'ai',
                         }),
                       });
