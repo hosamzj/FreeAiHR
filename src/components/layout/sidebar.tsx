@@ -19,6 +19,7 @@ import {
   UserPlus,
   ClipboardList,
   Target,
+  Briefcase,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -34,6 +35,7 @@ interface NavItem {
 const allNavItems: NavItem[] = [
   // 招聘前端
   { id: 'dashboard', label: '招聘看板', icon: LayoutDashboard, href: '/dashboard', roles: ['admin', 'hr_manager'], group: '招聘管理' },
+  { id: 'positions', label: '职位管理', icon: Briefcase, href: '/positions', roles: ['admin', 'hr_manager'], group: '招聘管理' },
   { id: 'resumes', label: '简历管理', icon: FileText, href: '/resumes', roles: ['admin', 'hr_manager'], group: '招聘管理' },
   { id: 'collection', label: '简历采集', icon: Download, href: '/collection', roles: ['admin', 'hr_manager'], group: '招聘管理' },
   { id: 'interviews', label: '面试排期', icon: Calendar, href: '/interviews', roles: ['admin', 'hr_manager', 'interviewer'], group: '招聘管理' },

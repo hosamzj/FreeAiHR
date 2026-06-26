@@ -957,6 +957,28 @@ export default function ResumesPage() {
             key={candidate.id}
             className="card-hover rounded-xl border border-[#1e293b] bg-[#111827] overflow-hidden relative"
           >
+            {/* Pipeline Progress Bar */}
+            <div className="flex h-1">
+              {['new', 'screening', 'interview', 'offer', 'hired'].map((stage) => {
+                const stageIndex = ['new', 'screening', 'interview', 'offer', 'hired'].indexOf(stage);
+                const currentIndex = ['new', 'screening', 'interview', 'offer', 'hired'].indexOf(candidate.status);
+                const isCompleted = stageIndex < currentIndex;
+                const isCurrent = stageIndex === currentIndex;
+                const isRejected = candidate.status === 'rejected';
+                return (
+                  <div
+                    key={stage}
+                    className={cn(
+                      'flex-1 transition-all duration-500',
+                      isRejected ? 'bg-red-500/30' :
+                      isCompleted ? 'bg-emerald-500' :
+                      isCurrent ? 'bg-sky-400' :
+                      'bg-[#1e293b]'
+                    )}
+                  />
+                );
+              })}
+            </div>
             {/* Selection checkbox */}
             <div className="absolute top-3 left-3 z-10">
               <button
