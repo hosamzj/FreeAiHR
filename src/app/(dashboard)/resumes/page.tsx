@@ -29,6 +29,7 @@ import {
   Copy,
   GitBranch,
   CheckCircle,
+  ExternalLink,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { mockCandidates } from '@/lib/mock-data';
@@ -53,6 +54,7 @@ interface ParsedResumeData {
   confidence?: number;
   parseMethod?: string;
   rawTextLength?: number;
+  fileUrl?: string;
 }
 import { Modal } from '@/components/ui/modal';
 import { ResumePreviewModal } from '@/components/resume-preview-modal';
@@ -743,6 +745,18 @@ export default function ResumesPage() {
                   <p className="text-[10px] text-slate-600">{parsedResult.parseMethod === 'llm' ? 'LLM 解析' : '解析'}</p>
                 </div>
               </div>
+              {parsedResult.fileUrl && (
+                <a
+                  href={parsedResult.fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 flex items-center gap-2 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-[11px] md:text-xs text-sky-400 hover:bg-[#111827] transition-colors"
+                >
+                  <FileText className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">查看原始简历</span>
+                  <ExternalLink className="h-3 w-3 shrink-0 ml-auto" />
+                </a>
+              )}
             </div>
             <div className="md:col-span-2 space-y-3">
               <div>

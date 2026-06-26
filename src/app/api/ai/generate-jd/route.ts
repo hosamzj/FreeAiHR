@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
     await requireAuth();
 
     const body = await request.json();
-    const { positionName, department, experience, salaryRange, skills } = body;
+    const { positionName, department, industry, experience, salary, skills } = body;
 
     if (!positionName) {
       return error(422, '请输入岗位名称');
@@ -19,16 +19,17 @@ export async function POST(request: NextRequest) {
     const prompt = `请为以下职位生成一份完整的职位描述(JD)：
 
 职位名称：${positionName}
+${industry ? `所属行业：${industry}` : ''}
 所属部门：${department || '未指定'}
 工作经验要求：${experience || '不限'}
-薪资范围：${salaryRange ? `${salaryRange.min}K-${salaryRange.max}K` : '面议'}
+薪资范围：${salary || '面议'}
 ${skills && skills.length > 0 ? `技能要求：${skills.join('、')}` : ''}
 
-请生成以下内容：
-1. 岗位职责（5-8条）
-2. 任职要求（5-8条）
-3. 加分项（3-5条）
-4. 福利待遇（3-5条）
+请结合${industry ? `${industry}行业的特点和趋势` : '行业通用标准'}，生成以下内容：
+1. 岗位职责（5-8条，体现该行业和职位的核心工作内容）
+2. 任职要求（5-8条，包含行业特有的技能和资质要求）
+3. 加分项（3-5条，结合行业前沿趋势）
+4. 福利待遇（3-5条，符合行业惯例）
 
 请用JSON格式返回，包含以下字段：
 {
@@ -85,8 +86,9 @@ ${skills && skills.length > 0 ? `技能要求：${skills.join('、')}` : ''}
     return success({
       positionName,
       department,
+      industry,
       experience,
-      salaryRange,
+      salary,
       skills,
       ...jdData,
       generatedAt: new Date().toISOString(),

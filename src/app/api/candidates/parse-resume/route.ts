@@ -2,6 +2,9 @@ import { NextRequest } from 'next/server';
 import { success, error } from '@/lib/auth';
 import { parseResumeWithLLM, ParsedResume } from '@/lib/ai';
 import mammoth from 'mammoth';
+import { writeFile, mkdir } from 'fs/promises';
+import path from 'path';
+import crypto from 'crypto';
 
 // pdf-parse v2 uses PDFParse class
 async function parsePDF(buffer: Buffer): Promise<string> {
@@ -9,6 +12,18 @@ async function parsePDF(buffer: Buffer): Promise<string> {
   const pdf = new PDFParse({ data: buffer });
   const result = await pdf.getText();
   return result.text || '';
+}
+
+// 保存上传文件到 public/uploads/resumes/
+async function saveUploadedFile(file: File): Promise<string> {
+  const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'resumes');
+  await mkdir(uploadDir, { recursive: true });
+  const ext = path.extname(file.name) || '.bin';
+  const uniqueName = `${crypto.randomUUID()}${ext}`;
+  const filePath = path.join(uploadDir, uniqueName);
+  const buffer = Buffer.from(await file.arrayBuffer());
+  await writeFile(filePath, buffer);
+  return `/uploads/resumes/${uniqueName}`;
 }
 
 // POST /api/candidates/parse-resume - 简历文件上传并 AI 解析
@@ -25,11 +40,20 @@ export async function POST(request: NextRequest) {
       // 如果有文本内容，直接解析
       if (resumeText) {
         const parsed = await parseResumeWithLLM(resumeText);
-        return success({ ...parsed, fileName: 'text-input', confidence: 0.95 });
+        return success({ ...parsed, fileName: 'text-input', confidence: 0.95, fileUrl: '' });
       }
 
       if (!file) {
         return error(422, '请上传简历文件');
+      }
+
+      // 保存原始文件作为附件
+      let fileUrl = '';
+      try {
+        fileUrl = await saveUploadedFile(file);
+      } catch (saveErr) {
+        console.error('Save file error:', saveErr);
+        // 保存失败不阻塞解析流程
       }
 
       const fileName = file.name.toLowerCase();
@@ -78,6 +102,7 @@ export async function POST(request: NextRequest) {
           fileName: file.name,
           confidence: 0.92,
           parseMethod: 'multimodal-llm',
+          fileUrl,
         });
       } else {
         return error(422, '不支持的文件格式，请上传 PDF、Word、图片或 TXT 文件');
@@ -97,6 +122,7 @@ export async function POST(request: NextRequest) {
         confidence: 0.93,
         parseMethod: 'text-llm',
         rawTextLength: extractedText.length,
+        fileUrl,
       });
     }
 

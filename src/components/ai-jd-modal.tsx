@@ -24,6 +24,7 @@ export function AIJDModal({ isOpen, onClose }: AIJDModalProps) {
   const [form, setForm] = useState({
     positionName: '',
     department: '',
+    industry: '',
     experience: '',
     salaryMin: '',
     salaryMax: '',
@@ -42,6 +43,7 @@ export function AIJDModal({ isOpen, onClose }: AIJDModalProps) {
         body: JSON.stringify({
           positionName: form.positionName,
           department: form.department,
+          industry: form.industry,
           experience: form.experience,
           salary: form.salaryMin && form.salaryMax ? `${form.salaryMin}-${form.salaryMax}K` : '',
           skills: form.skills.split(/[,，、]/).map(s => s.trim()).filter(Boolean),
@@ -87,7 +89,7 @@ export function AIJDModal({ isOpen, onClose }: AIJDModalProps) {
   const handleClose = () => {
     setStep('form');
     setResult(null);
-    setForm({ positionName: '', department: '', experience: '', salaryMin: '', salaryMax: '', skills: '' });
+    setForm({ positionName: '', department: '', industry: '', experience: '', salaryMin: '', salaryMax: '', skills: '' });
     onClose();
   };
 
@@ -115,6 +117,33 @@ export function AIJDModal({ isOpen, onClose }: AIJDModalProps) {
               />
             </div>
             <div>
+              <label className="block text-sm text-slate-300 mb-1">行业类型 *</label>
+              <select
+                value={form.industry}
+                onChange={(e) => setForm({ ...form, industry: e.target.value })}
+                className="w-full px-3 py-2 bg-[#0a0e1a] border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500"
+              >
+                <option value="">请选择行业</option>
+                <option value="互联网/IT">互联网/IT</option>
+                <option value="金融/保险">金融/保险</option>
+                <option value="电商/零售">电商/零售</option>
+                <option value="教育/培训">教育/培训</option>
+                <option value="医疗/健康">医疗/健康</option>
+                <option value="制造/工业">制造/工业</option>
+                <option value="房地产/建筑">房地产/建筑</option>
+                <option value="物流/交通">物流/交通</option>
+                <option value="能源/环保">能源/环保</option>
+                <option value="广告/传媒">广告/传媒</option>
+                <option value="游戏/娱乐">游戏/娱乐</option>
+                <option value="人工智能/AI">人工智能/AI</option>
+                <option value="企业服务/SaaS">企业服务/SaaS</option>
+                <option value="汽车/出行">汽车/出行</option>
+                <option value="消费/生活服务">消费/生活服务</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
               <label className="block text-sm text-slate-300 mb-1">工作年限</label>
               <select
                 value={form.experience}
@@ -129,25 +158,25 @@ export function AIJDModal({ isOpen, onClose }: AIJDModalProps) {
                 <option value="10年以上">10年以上</option>
               </select>
             </div>
-          </div>
-          <div>
-            <label className="block text-sm text-slate-300 mb-1">薪资范围 (K/月)</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                value={form.salaryMin}
-                onChange={(e) => setForm({ ...form, salaryMin: e.target.value })}
-                placeholder="最低"
-                className="flex-1 px-3 py-2 bg-[#0a0e1a] border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
-              />
-              <span className="text-slate-500">-</span>
-              <input
-                type="number"
-                value={form.salaryMax}
-                onChange={(e) => setForm({ ...form, salaryMax: e.target.value })}
-                placeholder="最高"
-                className="flex-1 px-3 py-2 bg-[#0a0e1a] border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
-              />
+            <div>
+              <label className="block text-sm text-slate-300 mb-1">薪资范围 (K/月)</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  value={form.salaryMin}
+                  onChange={(e) => setForm({ ...form, salaryMin: e.target.value })}
+                  placeholder="最低"
+                  className="flex-1 px-3 py-2 bg-[#0a0e1a] border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                />
+                <span className="text-slate-500">-</span>
+                <input
+                  type="number"
+                  value={form.salaryMax}
+                  onChange={(e) => setForm({ ...form, salaryMax: e.target.value })}
+                  placeholder="最高"
+                  className="flex-1 px-3 py-2 bg-[#0a0e1a] border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                />
+              </div>
             </div>
           </div>
           <div>
