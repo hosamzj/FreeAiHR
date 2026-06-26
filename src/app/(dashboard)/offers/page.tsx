@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import {
   FileCheck,
   Sparkles,
@@ -19,9 +19,9 @@ import {
   AlertCircle,
   Copy,
   Download,
-  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { mockOffers } from '@/lib/mock-data';
 
 const statusConfig = {
   draft: { label: '草稿', bg: 'bg-slate-500/10', text: 'text-slate-400', border: 'border-slate-500/20' },
@@ -41,80 +41,36 @@ const pipeline = [
 ];
 
 export default function OffersPage() {
-  const [offers, setOffers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedOffer, setSelectedOffer] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showSalaryRef, setShowSalaryRef] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
 
-  const fetchOffers = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/offers');
-      const data = await res.json();
-      if (data.code === 0 && Array.isArray(data.data)) {
-        setOffers(data.data);
-      }
-    } catch (e) {
-      console.error('Failed to fetch offers:', e);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchOffers(); }, [fetchOffers]);
-
-  const handleApprove = async (offerId: string) => {
-    try {
-      const res = await fetch(`/api/offers/${offerId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'approved' }),
-      });
-      const data = await res.json();
-      if (data.code === 0) { fetchOffers(); } else { alert(data.message || '审批失败'); }
-    } catch { alert('审批失败'); }
+  const handleGenerateOffer = (offerId: string) => {
+    setIsGenerating(true);
+    setTimeout(() => {
+      setIsGenerating(false);
+    }, 2500);
   };
 
-  const handleReject = async (offerId: string) => {
-    try {
-      const res = await fetch(`/api/offers/${offerId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'rejected' }),
-      });
-      const data = await res.json();
-      if (data.code === 0) { fetchOffers(); } else { alert(data.message || '驳回失败'); }
-    } catch { alert('驳回失败'); }
+  const handleApprove = (offerId: string) => {
+    alert(`Offer ${offerId} 审批通过！`);
   };
 
-  const handleSend = async (offerId: string) => {
-    try {
-      const res = await fetch(`/api/offers/${offerId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'sent' }),
-      });
-      const data = await res.json();
-      if (data.code === 0) { fetchOffers(); } else { alert(data.message || '发送失败'); }
-    } catch { alert('发送失败'); }
+  const handleReject = (offerId: string) => {
+    alert(`Offer ${offerId} 已驳回！`);
   };
 
-  const pipeline = [
-    { status: 'draft', label: '草稿', count: offers.filter(o => o.status === 'draft').length },
-    { status: 'pending', label: '待审批', count: offers.filter(o => o.status === 'pending').length },
-    { status: 'approved', label: '已审批', count: offers.filter(o => o.status === 'approved').length },
-    { status: 'sent', label: '已发送', count: offers.filter(o => o.status === 'sent').length },
-    { status: 'accepted', label: '已接受', count: offers.filter(o => o.status === 'accepted').length },
-  ];
+  const handleSend = (offerId: string) => {
+    alert(`Offer ${offerId} 已发送给候选人！`);
+  };
 
   const stats = [
-    { label: '本月Offer', value: offers.length, icon: FileCheck, color: 'bg-sky-500/10', iconColor: 'text-sky-400' },
-    { label: '待审批', value: offers.filter(o => o.status === 'pending').length, icon: Clock, color: 'bg-amber-500/10', iconColor: 'text-amber-400' },
-    { label: '已接受', value: offers.filter(o => o.status === 'accepted').length, icon: CheckCircle2, color: 'bg-emerald-500/10', iconColor: 'text-emerald-400' },
-    { label: '接受率', value: offers.length > 0 ? `${Math.round(offers.filter(o => o.status === 'accepted').length / offers.length * 100)}%` : '0%', icon: TrendingUp, color: 'bg-violet-500/10', iconColor: 'text-violet-400' },
+    { label: '本月Offer', value: mockOffers.length, icon: FileCheck, color: 'bg-sky-500/10', iconColor: 'text-sky-400' },
+    { label: '待审批', value: mockOffers.filter(o => o.status === 'pending').length, icon: Clock, color: 'bg-amber-500/10', iconColor: 'text-amber-400' },
+    { label: '已接受', value: mockOffers.filter(o => o.status === 'accepted').length, icon: CheckCircle2, color: 'bg-emerald-500/10', iconColor: 'text-emerald-400' },
+    { label: '接受率', value: '85%', icon: TrendingUp, color: 'bg-violet-500/10', iconColor: 'text-violet-400' },
   ];
 
   return (
@@ -178,17 +134,7 @@ export default function OffersPage() {
 
       {/* Offer List */}
       <div className="space-y-3 md:space-y-4">
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : offers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-            <FileCheck className="w-12 h-12 mb-3 opacity-30" />
-            <p>暂无Offer记录</p>
-            <p className="text-xs mt-1">通过简历筛选后，可在此生成和管理Offer</p>
-          </div>
-        ) : offers.map((offer) => {
+        {mockOffers.map((offer) => {
           const status = statusConfig[offer.status as keyof typeof statusConfig];
           const isExpanded = selectedOffer === offer.id;
           return (
@@ -300,7 +246,7 @@ export default function OffersPage() {
                         <TrendingUp className="h-3 w-3" /> 福利待遇
                       </p>
                       <div className="flex flex-wrap gap-1 md:gap-1.5">
-                        {offer.benefits.map((b: string) => (
+                        {offer.benefits.map((b) => (
                           <span key={b} className="rounded-md bg-sky-500/10 px-1.5 md:px-2 py-0.5 md:py-1 text-[10px] md:text-[11px] text-sky-400 border border-sky-500/20">
                             {b}
                           </span>
@@ -322,7 +268,7 @@ export default function OffersPage() {
                     {offer.status === 'draft' && (
                       <>
                         <button
-                          onClick={() => setIsGenerating(true)}
+                          onClick={() => handleGenerateOffer(offer.id)}
                           disabled={isGenerating}
                           className={cn(
                             'flex h-8 md:h-9 items-center gap-1.5 md:gap-2 rounded-lg px-3 md:px-4 text-[11px] md:text-sm font-medium transition-colors',

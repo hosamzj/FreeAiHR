@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Target, Search, Filter, UserPlus, Star, RefreshCw, Trash2 } from 'lucide-react';
+import { Target, Search, Filter, UserPlus, Star, RefreshCw } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
 
 interface PoolCandidate {
@@ -80,21 +80,6 @@ export default function CandidatePoolPage() {
       loadPool();
     } catch (e) {
       console.error('Update status error:', e);
-    }
-  };
-
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`确定要从候选人池中移除 ${name} 吗？`)) return;
-    try {
-      const res = await fetch(`/api/candidate-pool?id=${id}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (data.code === 0) {
-        loadPool();
-      } else {
-        alert(data.message || '移除失败');
-      }
-    } catch (e) {
-      console.error('Delete from pool error:', e);
     }
   };
 
@@ -185,18 +170,9 @@ export default function CandidatePoolPage() {
                   <p className="font-medium text-white">{p.candidate?.name || '未知'}</p>
                   <p className="text-xs text-slate-400">{p.candidate?.appliedPosition || '未指定岗位'}</p>
                 </div>
-                <div className="flex items-center gap-1">
-                  <span className={`rounded-full px-2 py-0.5 text-xs ${getStatusColor(p.status)}`}>
-                    {getStatusLabel(p.status)}
-                  </span>
-                  <button
-                    onClick={() => handleDelete(p.id, p.candidate?.name || '未知')}
-                    className="rounded p-1 text-slate-500 hover:bg-red-500/10 hover:text-red-400 transition-colors"
-                    title="从候选池移除"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                <span className={`rounded-full px-2 py-0.5 text-xs ${getStatusColor(p.status)}`}>
+                  {getStatusLabel(p.status)}
+                </span>
               </div>
               <div className="mt-3 flex flex-wrap gap-1">
                 {(p.skillTags || []).slice(0, 4).map((tag, i) => (

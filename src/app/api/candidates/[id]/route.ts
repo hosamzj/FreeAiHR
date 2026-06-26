@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAuth, success, unauthorized, badRequest, error } from '@/lib/auth';
+import { requireAuth, success, unauthorized, badRequest } from '@/lib/auth';
 
 // GET /api/candidates/[id]
 export async function GET(
@@ -98,34 +98,5 @@ export async function PUT(
   } catch (err) {
     console.error('Update candidate error:', err);
     return badRequest('更新候选人失败');
-  }
-}
-
-// DELETE /api/candidates/[id]
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
-  const user = await requireAuth();
-  if (!user) return unauthorized();
-
-  try {
-    const candidate = await prisma.candidate.findUnique({ where: { id } });
-    if (!candidate) return error(404, '候选人不存在');
-
-    // 删除关联数据
-    await prisma.candidateFeedback.deleteMany({ where: { candidateId: id } });
-    await prisma.interview.deleteMany({ where: { candidateId: id } });
-    await prisma.offer.deleteMany({ where: { candidateId: id } });
-    await prisma.application.deleteMany({ where: { candidateId: id } });
-
-    // 删除候选人
-    await prisma.candidate.delete({ where: { id } });
-
-    return success(null, '候选人已删除');
-  } catch (err) {
-    console.error('Delete candidate error:', err);
-    return error(500, '删除候选人失败');
   }
 }

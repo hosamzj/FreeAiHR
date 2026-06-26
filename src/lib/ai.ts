@@ -1,17 +1,5 @@
 import { prisma } from '@/lib/prisma';
 
-// ============================================================
-// 默认 AI 配置（Agnes 免费优先，DeepSeek 需用户自行配置 API Key）
-// ============================================================
-const DEFAULT_CONFIG = {
-  provider: 'agnes',
-  baseUrl: 'https://apihub.agnes-ai.com/v1',
-  model: 'agnes-2.0-flash',
-} as const;
-
-// 不支持 vision（多模态图片理解）的 provider 列表
-const NO_VISION_PROVIDERS = new Set(['deepseek']);
-
 interface AIConfig {
   provider: string;
   apiKey: string;
@@ -19,164 +7,57 @@ interface AIConfig {
   baseUrl: string;
 }
 
-// ============================================================
-// 获取 AI 配置（优先数据库自定义 → 回退默认）
-// ============================================================
+// 获取AI配置
 export async function getAIConfig(): Promise<AIConfig> {
-  try {
-    const config = await prisma.systemConfig.findUnique({
-      where: { key: 'ai_config' },
-    });
+  const config = await prisma.systemConfig.findUnique({
+    where: { key: 'ai_config' },
+  });
 
-    if (config) {
-      const value = JSON.parse(config.value) as Record<string, string>;
-      // 如果用户配置了自定义 AI，使用自定义配置
-      if (value.provider && value.provider !== 'mock' && value.apiKey) {
-        return {
-          provider: value.provider,
-          apiKey: value.apiKey,
-          model: value.model || DEFAULT_CONFIG.model,
-          baseUrl: value.baseUrl || DEFAULT_CONFIG.baseUrl,
-        };
-      }
-    }
-  } catch {
-    // 数据库读取失败，使用默认配置
+  if (!config) {
+    return {
+      provider: 'mock',
+      apiKey: '',
+      model: '',
+      baseUrl: '',
+    };
   }
 
-  // 使用默认配置（环境变量优先）
-  const apiKey = process.env.DEEPSEEK_API_KEY || process.env.AGNES_API_KEY || '';
-  return {
-    provider: DEFAULT_CONFIG.provider,
-    apiKey,
-    model: DEFAULT_CONFIG.model,
-    baseUrl: DEFAULT_CONFIG.baseUrl,
-  };
+  try {
+    const value = JSON.parse(config.value) as Record<string, string>;
+    return {
+      provider: value.provider || 'mock',
+      apiKey: value.apiKey || '',
+      model: value.model || '',
+      baseUrl: value.baseUrl || '',
+    };
+  } catch {
+    return {
+      provider: 'mock',
+      apiKey: '',
+      model: '',
+      baseUrl: '',
+    };
+  }
 }
 
-/** 检查当前 AI 是否支持 vision（多模态图片理解） */
-export async function supportsVision(): Promise<boolean> {
-  const config = await getAIConfig();
-  return !NO_VISION_PROVIDERS.has(config.provider);
-}
-
-// ============================================================
-// 通用 LLM 调用（OpenAI 兼容协议）
-// ============================================================
-export interface ContentPart {
-  type: 'text' | 'image_url';
-  text?: string;
-  image_url?: { url: string; detail?: 'low' | 'high' | 'auto' };
-}
-
+// 调用LLM API
 export async function callLLM(
   prompt: string,
   options: {
     systemPrompt?: string;
     temperature?: number;
     maxTokens?: number;
-    responseFormat?: 'text' | 'json_object';
-    contentParts?: ContentPart[];
   } = {}
 ): Promise<string> {
   const config = await getAIConfig();
 
-  // 无 API Key 时使用模拟数据
-  if (!config.apiKey) {
-    console.warn('[AI] No API key configured, using mock response');
+  // 模拟模式 - 返回mock数据
+  if (config.provider === 'mock' || !config.apiKey) {
     return generateMockResponse(prompt);
   }
 
+  // 实际调用LLM API
   try {
-    const messages: Array<{ role: string; content: string | ContentPart[] }> = [];
-    if (options.systemPrompt) {
-      messages.push({ role: 'system', content: options.systemPrompt });
-    }
-    // 支持多模态 content（图片 + 文本）
-    if (options.contentParts && options.contentParts.length > 0) {
-      messages.push({ role: 'user', content: options.contentParts });
-    } else {
-      messages.push({ role: 'user', content: prompt });
-    }
-
-    const body: Record<string, unknown> = {
-      model: config.model,
-      messages,
-      temperature: options.temperature ?? 0.1,
-      max_tokens: options.maxTokens ?? 4096,
-    };
-
-    // DeepSeek v4 默认开启思考模式，需要显式禁用以获取干净输出
-    if (config.provider === 'deepseek') {
-      body.thinking = { type: 'disabled' };
-    }
-
-    // JSON 模式
-    if (options.responseFormat === 'json_object') {
-      body.response_format = { type: 'json_object' };
-    }
-
-    const response = await fetch(`${config.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`,
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[AI] API error (${response.status}):`, errorText.substring(0, 500));
-      throw new Error(`AI API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || '';
-
-    if (!content) {
-      console.warn('[AI] Empty response from API');
-      return generateMockResponse(prompt);
-    }
-
-    return content;
-  } catch (err) {
-    console.error('[AI] Call failed:', err instanceof Error ? err.message : err);
-    // 出错时回退到模拟数据，保证业务不中断
-    return generateMockResponse(prompt);
-  }
-}
-
-// ============================================================
-// 流式 LLM 调用（SSE）
-// ============================================================
-export async function* callLLMStream(
-  prompt: string,
-  options: {
-    systemPrompt?: string;
-    temperature?: number;
-    maxTokens?: number;
-  } = {}
-): AsyncGenerator<string, void, unknown> {
-  const config = await getAIConfig();
-
-  if (!config.apiKey) {
-    // 无 API Key 时模拟流式输出
-    const mock = generateMockResponse(prompt);
-    for (const char of mock) {
-      yield char;
-      await new Promise((r) => setTimeout(r, 10));
-    }
-    return;
-  }
-
-  try {
-    const messages: Array<{ role: string; content: string }> = [];
-    if (options.systemPrompt) {
-      messages.push({ role: 'system', content: options.systemPrompt });
-    }
-    messages.push({ role: 'user', content: prompt });
-
     const response = await fetch(`${config.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -185,395 +66,174 @@ export async function* callLLMStream(
       },
       body: JSON.stringify({
         model: config.model,
-        messages,
-        temperature: options.temperature ?? 0.1,
-        max_tokens: options.maxTokens ?? 4096,
-        stream: true,
-        ...(config.provider === 'deepseek' ? { thinking: { type: 'disabled' } } : {}),
+        messages: [
+          ...(options.systemPrompt ? [{ role: 'system', content: options.systemPrompt }] : []),
+          { role: 'user', content: prompt },
+        ],
+        temperature: options.temperature ?? 0.7,
+        max_tokens: options.maxTokens ?? 2000,
       }),
     });
 
-    if (!response.ok || !response.body) {
-      throw new Error(`Stream API error: ${response.status}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('LLM API error:', errorText);
+      throw new Error(`LLM API error: ${response.status}`);
     }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data: ')) continue;
-
-        const data = trimmed.slice(6);
-        if (data === '[DONE]') return;
-
-        try {
-          const parsed = JSON.parse(data);
-          const content = parsed.choices?.[0]?.delta?.content;
-          if (content) yield content;
-        } catch {
-          // 跳过无法解析的行
-        }
-      }
-    }
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content || '';
   } catch (err) {
-    console.error('[AI] Stream failed:', err instanceof Error ? err.message : err);
-    const mock = generateMockResponse(prompt);
-    for (const char of mock) {
-      yield char;
-      await new Promise((r) => setTimeout(r, 10));
-    }
+    console.error('Call LLM error:', err);
+    // 出错时返回mock数据
+    return generateMockResponse(prompt);
   }
 }
 
-// ============================================================
-// 专用 AI 函数
-// ============================================================
-
-/** 解析简历文本 → 结构化候选人信息 */
-export async function parseResume(resumeText: string): Promise<Record<string, unknown>> {
-  const result = await callLLM(
-    `请从以下简历内容中提取结构化信息，输出 JSON：
-
-${resumeText.substring(0, 8000)}
-
-请提取以下字段（如果简历中不存在则设为 null 或空数组）：
-{
-  "name": "姓名",
-  "phone": "手机号码",
-  "email": "邮箱地址",
-  "education": [{"school": "学校", "degree": "学历", "major": "专业", "startDate": "开始日期", "endDate": "结束日期"}],
-  "experience": [{"company": "公司", "position": "职位", "startDate": "开始日期", "endDate": "结束日期", "description": "工作描述"}],
-  "skills": ["技能1", "技能2"],
-  "certificates": ["证书1"],
-  "projects": [{"name": "项目名", "description": "项目描述"}],
-  "summary": "候选人综合概述（50字以内）",
-  "confidence": 0.95
-}`,
-    {
-      systemPrompt: '你是一位专业的简历解析专家。请从简历文本中精确提取结构化信息。只返回 JSON，不要任何其他内容。',
-      temperature: 0.1,
-      responseFormat: 'json_object',
-    }
-  );
-
-  return parseAIJson(result);
-}
-
-/** 从图片/PDF文件中解析简历（多模态视觉） */
-export async function parseResumeFromImage(base64Image: string, mimeType: string): Promise<Record<string, unknown>> {
-  const result = await callLLM(
-    `你是一位专业的中文简历解析专家。请仔细阅读这张简历图片中的每一个文字，精确提取以下结构化信息。
-
-【重要规则】
-1. 逐字逐句阅读图片中的所有文字，不要遗漏任何信息
-2. 姓名、手机号、邮箱、公司名、学校名必须与图片原文完全一致
-3. 工作经历按时间倒序排列（最近的在前面）
-4. 技能从"技能证书"、"专业技能"、"个人技能"等板块提取
-5. 自我评价、获得荣誉、证书等附加信息也要提取
-6. 如果某个字段在简历中确实不存在，设为 null 或空数组
-7. 不要编造、不要猜测、不要补充图片中没有的信息
-
-请输出以下 JSON 格式：
-{
-  "name": "姓名（原文）",
-  "phone": "手机号码（原文）",
-  "email": "邮箱地址（原文）",
-  "birthplace": "籍贯",
-  "birthDate": "出生年月",
-  "currentLocation": "现居地",
-  "politicalStatus": "政治面貌",
-  "education": [
-    {
-      "school": "学校全称",
-      "degree": "学历（如本科、硕士）",
-      "major": "专业名称",
-      "startDate": "开始日期",
-      "endDate": "结束日期",
-      "courses": ["主修课程1", "主修课程2"]
-    }
-  ],
-  "experience": [
-    {
-      "company": "公司全称",
-      "position": "职位名称",
-      "startDate": "开始日期",
-      "endDate": "结束日期",
-      "description": "工作描述（保留原文要点）"
-    }
-  ],
-  "skills": ["技能1", "技能2"],
-  "certificates": ["证书1", "证书2"],
-  "languages": ["语言能力描述"],
-  "selfEvaluation": "自我评价（原文摘要）",
-  "honors": ["获得荣誉1", "获得荣誉2"],
-  "appliedPosition": "应聘岗位",
-  "summary": "候选人综合概述（80字以内）",
-  "confidence": 0.95
-}`,
-    {
-      systemPrompt: '你是一位顶级的中文简历OCR与解析专家。你的任务是从简历图片中逐字逐句提取所有文字信息，并精确结构化。只返回 JSON，不要任何解释或额外文字。',
-      temperature: 0.05,
-      responseFormat: 'json_object',
-      contentParts: [{
-        type: 'image_url',
-        image_url: {
-          url: `data:${mimeType};base64,${base64Image}`,
-          detail: 'high',
-        },
-      }],
-    }
-  );
-
-  return parseAIJson(result);
-}
-
-/** 从邮件/文本中提取候选人信息 */
-export async function extractCandidateFromText(text: string): Promise<Record<string, unknown>> {
-  const result = await callLLM(
-    `请从以下文本中提取候选人简历信息，输出 JSON：
-
-${text.substring(0, 6000)}
-
-{
-  "name": "姓名",
-  "email": "邮箱地址",
-  "phone": "手机号码",
-  "education": "学历（如本科、硕士）",
-  "school": "毕业院校",
-  "major": "专业",
-  "experience": 工作年限数字,
-  "currentCompany": "当前公司",
-  "currentPosition": "当前职位",
-  "skills": ["技能列表"],
-  "expectedSalary": "期望薪资",
-  "location": "所在城市",
-  "appliedPosition": "应聘岗位"
-}`,
-    {
-      systemPrompt: '你是一位专业的简历解析专家，从文本中提取候选人信息。只返回 JSON，不要其他内容。',
-      temperature: 0.1,
-      responseFormat: 'json_object',
-    }
-  );
-
-  return parseAIJson(result);
-}
-
-/** 根据 JD 和候选人简历生成面试问题 */
-export async function generateInterviewQuestions(
-  jdTitle: string,
-  jdDescription: string,
-  candidateResume: string
-): Promise<Record<string, unknown>> {
-  const result = await callLLM(
-    `请根据以下职位描述和候选人简历，生成 5 道个性化面试题目。
-
-【职位名称】${jdTitle}
-【职位描述】${jdDescription.substring(0, 2000)}
-【候选人简历】${candidateResume.substring(0, 3000)}
-
-输出 JSON 格式：
-{
-  "questions": [
-    {
-      "type": "technical|behavioral|situational",
-      "difficulty": "easy|medium|hard",
-      "question": "面试问题",
-      "evaluationPoints": ["评估要点1", "评估要点2"],
-      "referenceAnswer": "参考答案要点"
-    }
-  ],
-  "focusAreas": ["需要重点考察的领域"],
-  "suggestedDuration": "建议面试时长（分钟）"
-}`,
-    {
-      systemPrompt: '你是一位资深的面试官和技术招聘专家。请根据 JD 和候选人背景，生成有针对性的面试题目。只返回 JSON。',
-      temperature: 0.3,
-      responseFormat: 'json_object',
-    }
-  );
-
-  return parseAIJson(result);
-}
-
-/** 计算候选人与 JD 的匹配度 */
-export async function calculateMatchScore(
-  jdTitle: string,
-  jdRequirements: string,
-  candidateResume: string
-): Promise<Record<string, unknown>> {
-  const result = await callLLM(
-    `请对比以下职位要求和候选人简历，计算匹配度评分。
-
-【职位名称】${jdTitle}
-【职位要求】${jdRequirements.substring(0, 3000)}
-【候选人简历】${candidateResume.substring(0, 4000)}
-
-输出 JSON 格式：
-{
-  "overallScore": 0-100的匹配度总分,
-  "dimensions": {
-    "skills": {"score": 0-100, "comment": "技能匹配评价"},
-    "experience": {"score": 0-100, "comment": "经验匹配评价"},
-    "education": {"score": 0-100, "comment": "学历匹配评价"},
-    "culture": {"score": 0-100, "comment": "文化匹配评价"}
-  },
-  "strengths": ["候选人优势1", "优势2"],
-  "gaps": ["候选人差距1", "差距2"],
-  "recommendation": "综合建议（是否推荐进入面试）",
-  "suggestedLevel": "建议定级（如 P6、P7）"
-}`,
-    {
-      systemPrompt: '你是一位资深的招聘评估专家。请客观对比 JD 和候选人简历，给出匹配度评分。只返回 JSON。',
-      temperature: 0.1,
-      responseFormat: 'json_object',
-    }
-  );
-
-  return parseAIJson(result);
-}
-
-/** 根据候选人背景和市场行情给出薪资建议 */
-export async function suggestSalary(
-  candidateResume: string,
-  positionTitle: string,
-  positionLevel: string,
-  city: string
-): Promise<Record<string, unknown>> {
-  const result = await callLLM(
-    `请根据候选人背景和职位信息，给出薪资建议。
-
-【候选人背景】${candidateResume.substring(0, 3000)}
-【职位名称】${positionTitle}
-【职位级别】${positionLevel}
-【工作城市】${city}
-
-输出 JSON 格式：
-{
-  "marketRange": {"min": 最低市场价(万/年), "max": 最高市场价(万/年), "median": 中位数(万/年)},
-  "suggestedRange": {"min": 建议最低(万/年), "max": 建议最高(万/年)},
-  "breakdown": {
-    "baseSalary": "建议基本月薪",
-    "bonus": "建议年终奖（月数）",
-    "stockOptions": "股票/期权建议"
-  },
-  "analysis": "薪资分析说明（100字以内）",
-  "negotiationTips": ["谈判建议1", "建议2"]
-}`,
-    {
-      systemPrompt: '你是一位资深的薪酬顾问，熟悉互联网行业薪资水平。请给出合理的薪资建议。只返回 JSON。',
-      temperature: 0.2,
-      responseFormat: 'json_object',
-    }
-  );
-
-  return parseAIJson(result);
-}
-
-// ============================================================
-// 工具函数
-// ============================================================
-
-/** 安全解析 AI 返回的 JSON */
-function parseAIJson(raw: string): Record<string, unknown> {
-  try {
-    // 尝试直接解析
-    return JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    // 尝试从 markdown 代码块中提取
-    const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (jsonMatch) {
-      try {
-        return JSON.parse(jsonMatch[1].trim()) as Record<string, unknown>;
-      } catch {
-        // 继续尝试
-      }
-    }
-    // 尝试匹配 { } 包裹的 JSON
-    const braceMatch = raw.match(/\{[\s\S]*\}/);
-    if (braceMatch) {
-      try {
-        return JSON.parse(braceMatch[0]) as Record<string, unknown>;
-      } catch {
-        // 继续尝试
-      }
-    }
-    console.error('[AI] Failed to parse JSON response:', raw.substring(0, 200));
-    return {};
-  }
-}
-
-// ============================================================
-// 模拟响应（无 API Key 时的兜底）
-// ============================================================
+// 生成模拟响应
 function generateMockResponse(prompt: string): string {
-  // 只检查 prompt 的前 200 个字符（即系统指令部分），避免用户简历内容干扰匹配
-  const instructionPart = prompt.substring(0, 200).toLowerCase();
+  const lowerPrompt = prompt.toLowerCase();
 
-  if (instructionPart.includes('面试题') || instructionPart.includes('generateinterviewquestions')) {
+  // JD生成
+  if (lowerPrompt.includes('职位描述') || lowerPrompt.includes('jd') || lowerPrompt.includes('岗位')) {
+    return JSON.stringify({
+      jobTitle: extractFromPrompt(prompt, '岗位名称') || '软件工程师',
+      responsibilities: [
+        '负责公司核心产品的开发与维护',
+        '参与系统架构设计和技术方案评审',
+        '编写高质量、可维护的代码',
+        '与产品、设计团队紧密合作，推动产品迭代',
+        '持续优化系统性能，提升用户体验',
+      ],
+      requirements: [
+        '本科及以上学历，计算机相关专业优先',
+        '3年以上相关开发经验',
+        '熟练掌握至少一种主流编程语言',
+        '良好的编码习惯和文档编写能力',
+        '具备较强的学习能力和团队协作精神',
+      ],
+      preferred: [
+        '有大型项目经验优先',
+        '熟悉敏捷开发流程优先',
+        '有开源项目贡献经验优先',
+      ],
+      benefits: [
+        '具有竞争力的薪酬待遇',
+        '完善的五险一金',
+        '弹性工作制',
+        '年度体检',
+        '丰富的团建活动',
+      ],
+    });
+  }
+
+  // 候选人画像
+  if (lowerPrompt.includes('候选人') || lowerPrompt.includes('画像') || lowerPrompt.includes('简历')) {
+    return JSON.stringify({
+      radarScores: {
+        technical: 75 + Math.floor(Math.random() * 20),
+        communication: 70 + Math.floor(Math.random() * 25),
+        leadership: 60 + Math.floor(Math.random() * 30),
+        innovation: 65 + Math.floor(Math.random() * 30),
+        execution: 75 + Math.floor(Math.random() * 20),
+        learning: 80 + Math.floor(Math.random() * 15),
+      },
+      personality: {
+        type: ['完美型', '成就型', '助人型', '自我型', '理智型', '忠诚型', '活跃型', '领袖型', '和平型'][Math.floor(Math.random() * 9)],
+        description: '该候选人展现出较强的专业能力和团队协作精神，在工作中注重细节，追求高质量交付。',
+      },
+      overallScore: 75 + Math.floor(Math.random() * 20),
+      matchAnalysis: {
+        matchPercentage: 70 + Math.floor(Math.random() * 25),
+        strengths: ['技术基础扎实', '项目经验丰富', '学习能力强'],
+        concerns: ['管理经验相对较少', '行业经验需要补充'],
+      },
+      summary: '综合评估该候选人具备较强的专业能力和发展潜力，建议进入下一轮面试。',
+    });
+  }
+
+  // 面试题目生成
+  if (lowerPrompt.includes('面试题') || lowerPrompt.includes('题目')) {
     return JSON.stringify({
       questions: [
-        { type: 'technical', difficulty: 'medium', question: '请描述您在之前项目中遇到的最具挑战性的技术问题及解决方案。', evaluationPoints: ['问题分析能力', '技术深度', '方案完整性'], referenceAnswer: '应展示系统性的问题解决思路。' },
-        { type: 'behavioral', difficulty: 'medium', question: '请举例说明您如何处理团队中的意见分歧。', evaluationPoints: ['沟通能力', '团队协作', '冲突处理'], referenceAnswer: '应展示良好的沟通技巧和团队协作精神。' },
-        { type: 'situational', difficulty: 'hard', question: '如果项目进度严重滞后且需求变更，您如何处理？', evaluationPoints: ['应变能力', '优先级判断', '风险管理'], referenceAnswer: '应展示项目管理能力和应变策略。' },
-        { type: 'technical', difficulty: 'easy', question: '请解释您熟悉的技术栈中某个核心概念的工作原理。', evaluationPoints: ['技术理解深度', '表达能力'], referenceAnswer: '应清晰准确地解释技术概念。' },
-        { type: 'behavioral', difficulty: 'medium', question: '请描述一次您主动学习新技术的经历。', evaluationPoints: ['学习能力', '主动性'], referenceAnswer: '应展示持续学习的习惯。' },
+        {
+          type: 'technical',
+          difficulty: 'medium',
+          question: '请描述一下您在之前项目中遇到的最具挑战性的技术问题，以及您是如何解决的？',
+          evaluationPoints: ['问题分析能力', '解决方案的完整性', '技术深度'],
+          referenceAnswer: '候选人应展示系统性的问题解决思路，包括问题定位、方案设计、实施过程和结果验证。',
+        },
+        {
+          type: 'behavioral',
+          difficulty: 'medium',
+          question: '请举例说明您如何在团队中处理意见分歧的情况？',
+          evaluationPoints: ['沟通能力', '团队协作', '冲突处理'],
+          referenceAnswer: '候选人应展示良好的沟通技巧和团队协作精神，能够通过理性讨论达成共识。',
+        },
+        {
+          type: 'situational',
+          difficulty: 'hard',
+          question: '如果项目进度严重滞后，而客户需求又发生变更，您会如何处理？',
+          evaluationPoints: ['应变能力', '优先级判断', '风险管理'],
+          referenceAnswer: '候选人应展示良好的项目管理能力和应变策略，能够平衡多方需求。',
+        },
+        {
+          type: 'technical',
+          difficulty: 'easy',
+          question: '请解释一下您熟悉的技术栈中，某个核心概念的工作原理。',
+          evaluationPoints: ['技术理解深度', '表达能力'],
+          referenceAnswer: '候选人应能够清晰、准确地解释技术概念，展示扎实的技术基础。',
+        },
+        {
+          type: 'behavioral',
+          difficulty: 'medium',
+          question: '请描述一次您主动学习新技术或新知识的经历。',
+          evaluationPoints: ['学习能力', '主动性', '自我驱动'],
+          referenceAnswer: '候选人应展示持续学习的习惯和自我提升的意识。',
+        },
       ],
-      focusAreas: ['技术深度', '团队协作', '问题解决'],
-      suggestedDuration: 45,
     });
   }
 
-  if (instructionPart.includes('匹配度') || instructionPart.includes('calculatematchscore')) {
+  // 简历解析
+  if (lowerPrompt.includes('解析') || lowerPrompt.includes('提取')) {
     return JSON.stringify({
-      overallScore: 78,
-      dimensions: {
-        skills: { score: 82, comment: '技能匹配度较高' },
-        experience: { score: 75, comment: '经验基本符合要求' },
-        education: { score: 85, comment: '学历背景优秀' },
-        culture: { score: 70, comment: '文化契合度良好' },
-      },
-      strengths: ['技术基础扎实', '项目经验丰富', '学习能力强'],
-      gaps: ['管理经验相对较少', '行业经验需要补充'],
-      recommendation: '建议进入面试环节',
-      suggestedLevel: 'P6',
+      name: '张三',
+      phone: '13800138000',
+      email: 'zhangsan@example.com',
+      education: [
+        {
+          school: '北京大学',
+          degree: '本科',
+          major: '计算机科学',
+          startDate: '2015-09',
+          endDate: '2019-06',
+        },
+      ],
+      workExperience: [
+        {
+          company: '某科技公司',
+          position: '软件工程师',
+          startDate: '2019-07',
+          endDate: '至今',
+          description: '负责核心业务系统的开发与维护',
+        },
+      ],
+      skills: ['JavaScript', 'TypeScript', 'React', 'Node.js', 'Python'],
+      summary: '5年软件开发经验，熟悉前后端开发技术栈。',
     });
   }
 
-  if (instructionPart.includes('薪资建议') || instructionPart.includes('suggestsalary')) {
-    return JSON.stringify({
-      marketRange: { min: 25, max: 50, median: 35 },
-      suggestedRange: { min: 30, max: 42 },
-      breakdown: { baseSalary: '25K-35K/月', bonus: '3-6个月', stockOptions: '视级别而定' },
-      analysis: '候选人背景与岗位要求匹配度较高，建议在市场中等偏上水平给出offer。',
-      negotiationTips: ['强调公司发展前景', '突出技术氛围', '提供灵活工作制'],
-    });
-  }
-
-  // 默认：简历解析
-  return JSON.stringify({
-    name: null,
-    phone: null,
-    email: null,
-    education: [],
-    experience: [],
-    skills: [],
-    certificates: [],
-    projects: [],
-    summary: '（AI 未配置，使用模拟数据）',
-    confidence: 0,
-  });
+  // 默认响应
+  return JSON.stringify({ message: 'AI功能演示模式', data: {} });
 }
 
-// 别名导出
+// 从提示词中提取信息
+function extractFromPrompt(prompt: string, key: string): string {
+  const regex = new RegExp(`${key}[：:]\\s*([^\\n,，]+)`);
+  const match = prompt.match(regex);
+  return match ? match[1].trim() : '';
+}
+
+// 别名导出 - 供API路由使用
 export const generateAIContent = callLLM;

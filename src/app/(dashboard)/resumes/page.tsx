@@ -29,17 +29,13 @@ import {
   Copy,
   GitBranch,
   CheckCircle,
-  Mail,
-  Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { mockCandidates, type Candidate } from '@/lib/mock-data';
+import { mockCandidates, mockParsedResume } from '@/lib/mock-data';
 import { Modal } from '@/components/ui/modal';
 import { ResumePreviewModal } from '@/components/resume-preview-modal';
-import { CandidateDetailModal } from '@/components/candidate-detail-modal';
+import { AIJDModal } from '@/components/ai-jd-modal';
 import { AICandidateProfile } from '@/components/ai-candidate-profile';
-import { PipelineTracker } from '@/components/pipeline-tracker';
-import { EmailImport } from '@/components/email-import';
 
 type CandidateStatus = 'new' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected';
 type TabType = 'all' | CandidateStatus;
@@ -49,16 +45,10 @@ export default function ResumesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
-  const [parsedResult, setParsedResult] = useState<{
-    name: string; avatar: string; position: string; education: string;
-    school: string; experience: number; company: string; matchScore: number;
-    summary: string; matchedSkills: string[]; uncertainSkills: string[];
-    phone?: string; email?: string; resumeFileKey?: string;
-  } | null>(null);
+  const [parsedResult, setParsedResult] = useState<typeof mockParsedResume | null>(null);
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [showCollectionModal, setShowCollectionModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [showRejectOfferModal, setShowRejectOfferModal] = useState(false);
@@ -68,19 +58,10 @@ export default function ResumesPage() {
   const [showResumePreview, setShowResumePreview] = useState(false);
   const [resumePreviewData, setResumePreviewData] = useState<{ id: string; name: string; position?: string; resumeUrl?: string } | null>(null);
 
-  // Detail modal state
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [detailCandidate, setDetailCandidate] = useState<Record<string, unknown> | null>(null);
-
   // AI features state
+  const [showAIJDModal, setShowAIJDModal] = useState(false);
   const [showAIProfileModal, setShowAIProfileModal] = useState(false);
   const [aiProfileCandidate, setAiProfileCandidate] = useState<{ id: string; name: string; position?: string } | null>(null);
-
-  // Multi-select & batch add to candidate pool
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [showBatchPoolModal, setShowBatchPoolModal] = useState(false);
-  const [batchPoolForm, setBatchPoolForm] = useState({ status: 'active', skillTags: '', notes: '' });
-  const [batchPoolLoading, setBatchPoolLoading] = useState(false);
 
   // Duplicate detection state
   const [duplicateInfo, setDuplicateInfo] = useState<{
@@ -193,38 +174,15 @@ export default function ResumesPage() {
     { id: 'hired', label: '已入职', count: tabCounts.hired },
   ];
 
-  // Upload file to AI parse API and return parsed result
-  const uploadAndParse = useCallback(async (file: File) => {
-    setIsParsing(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/candidates/parse-resume', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
-      if (data.code === 0 && data.data) {
-        setParsedResult(data.data);
-      } else {
-        alert('简历解析失败：' + (data.message || '未知错误'));
-      }
-    } catch (err) {
-      console.error('Parse error:', err);
-      alert('简历解析失败，请检查网络后重试');
-    } finally {
-      setIsParsing(false);
-    }
-  }, []);
-
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsUploading(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      uploadAndParse(file);
-    }
-  }, [uploadAndParse]);
+    setIsParsing(true);
+    setTimeout(() => {
+      setIsParsing(false);
+      setParsedResult(mockParsedResume);
+    }, 2500);
+  }, []);
 
   const handleFileSelect = useCallback(() => {
     fileInputRef.current?.click();
@@ -234,9 +192,10 @@ export default function ResumesPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check for duplicates first
+    // Check for duplicates first by trying to parse the filename
     setCheckingDuplicate(true);
     try {
+      // Extract potential info from filename for duplicate check
       const fileName = file.name.replace(/\.(pdf|doc|docx|png|jpg|jpeg)$/i, '');
       const res = await fetch('/api/candidates/check-duplicate', {
         method: 'POST',
@@ -259,8 +218,12 @@ export default function ResumesPage() {
     setCheckingDuplicate(false);
 
     // No duplicate found, proceed with parsing
-    uploadAndParse(file);
-  }, [uploadAndParse]);
+    setIsParsing(true);
+    setTimeout(() => {
+      setIsParsing(false);
+      setParsedResult(mockParsedResume);
+    }, 2500);
+  }, []);
 
   // Handle duplicate resolution
   const handleDuplicateAction = useCallback((action: 'skip' | 'overwrite' | 'keep') => {
@@ -269,89 +232,30 @@ export default function ResumesPage() {
       return;
     }
     // For overwrite or keep, proceed with parsing
-    const file = duplicateInfo?.pendingFile;
     setDuplicateInfo(null);
-    if (file) {
-      uploadAndParse(file);
-    }
-  }, [duplicateInfo?.pendingFile, uploadAndParse]);
+    setIsParsing(true);
+    setTimeout(() => {
+      setIsParsing(false);
+      setParsedResult(mockParsedResume);
+    }, 2500);
+  }, []);
 
   const handlePassScreen = useCallback(async (candidateId: string, candidateName: string) => {
     setActionLoading(candidateId);
     try {
-      const res = await fetch(`/api/candidates/${candidateId}/pipeline`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'screen' }),
-      });
-      const data = await res.json();
-      if (data.code === 0) {
-        setCandidates(prev => prev.map(c => 
-          c.id === candidateId ? { ...c, status: 'screening' as const } : c
-        ));
-        alert(`已通过 ${candidateName} 的筛选`);
-      } else {
-        alert(data.message || '操作失败');
-      }
-    } catch {
+      // Update local state for immediate feedback
+      setCandidates(prev => prev.map(c => 
+        c.id === candidateId ? { ...c, status: 'screening' as const } : c
+      ));
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+      alert(`已通过 ${candidateName} 的筛选`);
+    } catch (error) {
       alert('操作失败，请重试');
     } finally {
       setActionLoading(null);
     }
   }, []);
-
-  // Toggle candidate selection
-  const toggleSelect = useCallback((id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const toggleSelectAll = useCallback(() => {
-    const filtered = candidates.filter(c => {
-      if (activeTab !== 'all' && c.status !== activeTab) return false;
-      if (searchQuery && !c.name.toLowerCase().includes(searchQuery.toLowerCase()) && !c.position?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-      return true;
-    });
-    if (selectedIds.size === filtered.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filtered.map(c => c.id)));
-    }
-  }, [candidates, activeTab, searchQuery, selectedIds.size]);
-
-  // Batch add to candidate pool
-  const handleBatchAddToPool = useCallback(async () => {
-    if (selectedIds.size === 0) return;
-    setBatchPoolLoading(true);
-    try {
-      const res = await fetch('/api/candidate-pool/batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          candidateIds: Array.from(selectedIds),
-          status: batchPoolForm.status,
-          skillTags: batchPoolForm.skillTags.split(',').map(s => s.trim()).filter(Boolean),
-          notes: batchPoolForm.notes,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok && data.code === 0) {
-        alert(`成功将 ${selectedIds.size} 位候选人添加到候选人池`);
-        setSelectedIds(new Set());
-        setShowBatchPoolModal(false);
-        setBatchPoolForm({ status: 'active', skillTags: '', notes: '' });
-      } else {
-        alert(data.message || '批量添加失败');
-      }
-    } catch (e) {
-      alert('批量添加失败，请重试');
-    } finally {
-      setBatchPoolLoading(false);
-    }
-  }, [selectedIds, batchPoolForm]);
 
   const handleScheduleInterview = useCallback(async (candidateId: string, candidateName: string) => {
     setSelectedCandidate(candidateId);
@@ -479,21 +383,12 @@ export default function ResumesPage() {
     if (!confirm(`确定要淘汰 ${candidateName} 吗？`)) return;
     setActionLoading(candidateId);
     try {
-      const res = await fetch(`/api/candidates/${candidateId}/pipeline`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'reject', reason: '不符合要求' }),
-      });
-      const data = await res.json();
-      if (data.code === 0) {
-        setCandidates(prev => prev.map(c => 
-          c.id === candidateId ? { ...c, status: 'rejected' as const } : c
-        ));
-        alert(`已淘汰 ${candidateName}`);
-      } else {
-        alert(data.message || '操作失败');
-      }
-    } catch {
+      setCandidates(prev => prev.map(c => 
+        c.id === candidateId ? { ...c, status: 'rejected' as const } : c
+      ));
+      await new Promise(resolve => setTimeout(resolve, 500));
+      alert(`已淘汰 ${candidateName}`);
+    } catch (error) {
       alert('操作失败，请重试');
     } finally {
       setActionLoading(null);
@@ -511,23 +406,14 @@ export default function ResumesPage() {
     if (!selectedCandidate) return;
     setActionLoading(selectedCandidate);
     try {
-      const res = await fetch(`/api/candidates/${selectedCandidate}/pipeline`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'generate_offer' }),
-      });
-      const data = await res.json();
-      if (data.code === 0) {
-        setCandidates(prev => prev.map(c =>
-          c.id === selectedCandidate ? { ...c, status: 'offer' as const } : c
-        ));
-        const candidate = candidates.find(c => c.id === selectedCandidate);
-        alert(`已向 ${candidate?.name || '候选人'} 发送Offer`);
-        setShowOfferModal(false);
-      } else {
-        alert(data.message || '操作失败');
-      }
-    } catch {
+      setCandidates(prev => prev.map(c =>
+        c.id === selectedCandidate ? { ...c, status: 'offer' as const } : c
+      ));
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const candidate = candidates.find(c => c.id === selectedCandidate);
+      alert(`已向 ${candidate?.name || '候选人'} 发送Offer`);
+      setShowOfferModal(false);
+    } catch (error) {
       alert('操作失败，请重试');
     } finally {
       setActionLoading(null);
@@ -539,28 +425,31 @@ export default function ResumesPage() {
     if (!confirm(`确认 ${candidateName} 已接受Offer并办理入职？\n\n系统将自动创建合同记录。`)) return;
     setActionLoading(candidateId);
     try {
-      const res = await fetch(`/api/candidates/${candidateId}/pipeline`, {
-        method: 'POST',
+      // 1. 更新候选人状态
+      setCandidates(prev => prev.map(c =>
+        c.id === candidateId ? { ...c, status: 'hired' as const } : c
+      ));
+      
+      // 2. 调用后端API更新状态并自动创建合同
+      const res = await fetch(`/api/candidates/${candidateId}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'accept_offer' }),
+        body: JSON.stringify({ status: 'hired' }),
       });
+      
       const data = await res.json();
-      if (data.code === 0) {
-        setCandidates(prev => prev.map(c =>
-          c.id === candidateId ? { ...c, status: 'hired' as const } : c
-        ));
-        if (data.data?.contractId) {
-          const contractId = data.data.contractId;
-          if (confirm(`✅ ${candidateName} 已入职！\n\n已自动创建合同记录（编号：${contractId?.slice(-8) || 'N/A'}）。\n\n点击"确定"跳转到合同管理查看。`)) {
-            window.location.href = '/contracts';
-          }
-        } else {
-          alert(`${candidateName} 已入职！`);
+      
+      if (data.code === 0 && data.data?.contractCreated) {
+        // 合同创建成功，显示提示并提供跳转
+        const contractId = data.data.contractId;
+        if (confirm(`✅ ${candidateName} 已入职！\n\n已自动创建合同记录（编号：${contractId?.slice(-8) || 'N/A'}）。\n\n点击"确定"跳转到合同管理查看。`)) {
+          window.location.href = '/contracts';
         }
       } else {
-        alert(data.message || '操作失败');
+        alert(`${candidateName} 已入职！`);
       }
-    } catch {
+    } catch (error) {
+      console.error('Accept offer error:', error);
       alert('操作失败，请重试');
     } finally {
       setActionLoading(null);
@@ -578,23 +467,14 @@ export default function ResumesPage() {
     if (!selectedCandidate) return;
     setActionLoading(selectedCandidate);
     try {
-      const res = await fetch(`/api/candidates/${selectedCandidate}/pipeline`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'reject', reason }),
-      });
-      const data = await res.json();
-      if (data.code === 0) {
-        setCandidates(prev => prev.map(c =>
-          c.id === selectedCandidate ? { ...c, status: 'rejected' as const } : c
-        ));
-        const candidate = candidates.find(c => c.id === selectedCandidate);
-        alert(`${candidate?.name || '候选人'} 已拒绝Offer`);
-        setShowRejectOfferModal(false);
-      } else {
-        alert(data.message || '操作失败');
-      }
-    } catch {
+      setCandidates(prev => prev.map(c =>
+        c.id === selectedCandidate ? { ...c, status: 'rejected' as const } : c
+      ));
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const candidate = candidates.find(c => c.id === selectedCandidate);
+      alert(`${candidate?.name || '候选人'} 已拒绝Offer`);
+      setShowRejectOfferModal(false);
+    } catch (error) {
       alert('操作失败，请重试');
     } finally {
       setActionLoading(null);
@@ -606,40 +486,13 @@ export default function ResumesPage() {
     if (!confirm(`确定要重新激活 ${candidateName} 的招聘流程吗？`)) return;
     setActionLoading(candidateId);
     try {
-      const res = await fetch(`/api/candidates/${candidateId}/pipeline`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'reactivate' }),
-      });
-      const data = await res.json();
-      if (data.code === 0) {
-        setCandidates(prev => prev.map(c =>
-          c.id === candidateId ? { ...c, status: 'screening' as const } : c
-        ));
-        alert(`${candidateName} 已重新激活`);
-      } else {
-        alert(data.message || '操作失败');
-      }
-    } catch {
+      setCandidates(prev => prev.map(c =>
+        c.id === candidateId ? { ...c, status: 'screening' as const } : c
+      ));
+      await new Promise(resolve => setTimeout(resolve, 500));
+      alert(`${candidateName} 已重新激活`);
+    } catch (error) {
       alert('操作失败，请重试');
-    } finally {
-      setActionLoading(null);
-    }
-  }, []);
-
-  const handleDeleteCandidate = useCallback(async (candidateId: string, candidateName: string) => {
-    if (!confirm(`确定要删除 ${candidateName} 的简历吗？此操作不可撤销。`)) return;
-    setActionLoading(candidateId);
-    try {
-      const res = await fetch(`/api/candidates/${candidateId}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (data.code === 0) {
-        setCandidates(prev => prev.filter(c => c.id !== candidateId));
-      } else {
-        alert(data.message || '删除失败');
-      }
-    } catch {
-      alert('删除失败，请重试');
     } finally {
       setActionLoading(null);
     }
@@ -692,12 +545,12 @@ export default function ResumesPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowCollectionModal(true)}
-            className="flex h-9 items-center gap-1.5 rounded-lg border border-orange-500/30 bg-orange-500/10 px-2.5 text-sm text-orange-400 hover:bg-orange-500/20 transition-colors sm:px-3"
+            onClick={() => setShowAIJDModal(true)}
+            className="flex h-9 items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2.5 text-sm text-sky-400 hover:bg-sky-500/20 transition-colors sm:px-3"
           >
-            <Mail className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">简历采集</span>
-            <span className="sm:hidden">采集</span>
+            <Sparkles className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">AI生成JD</span>
+            <span className="sm:hidden">JD</span>
           </button>
           <button
             onClick={() => setShowImportModal(true)}
@@ -709,28 +562,6 @@ export default function ResumesPage() {
           </button>
         </div>
       </div>
-
-      {/* Batch Action Bar */}
-      {selectedIds.size > 0 && (
-        <div className="flex items-center justify-between rounded-xl border border-orange-500/30 bg-orange-500/5 px-4 py-3">
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-orange-400">已选择 {selectedIds.size} 位候选人</span>
-            <button
-              onClick={() => setSelectedIds(new Set())}
-              className="text-xs text-slate-500 hover:text-white transition-colors"
-            >
-              取消选择
-            </button>
-          </div>
-          <button
-            onClick={() => setShowBatchPoolModal(true)}
-            className="flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 transition-colors"
-          >
-            <UserCheck className="h-4 w-4" />
-            添加到候选人池
-          </button>
-        </div>
-      )}
 
       {/* Upload Area */}
       <div
@@ -810,7 +641,7 @@ export default function ResumesPage() {
                 </div>
                 <div className="flex items-center gap-2 text-slate-400">
                   <Building2 className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                  <span className="truncate">{parsedResult.company || '暂无工作经历'}</span>
+                  <span className="truncate">{(parsedResult.workHistory || []).map(w => w.company).join(' → ') || '暂无工作经历'}</span>
                 </div>
               </div>
               <div className="mt-3 flex items-center gap-2">
@@ -832,7 +663,7 @@ export default function ResumesPage() {
               <div>
                 <p className="text-[11px] md:text-xs font-medium text-slate-400 mb-1.5">AI 摘要</p>
                 <p className="text-[11px] md:text-xs leading-relaxed text-slate-300 bg-[#0a0e1a] rounded-lg p-2.5 md:p-3 border border-[#1e293b]">
-                  {parsedResult.summary}
+                  {parsedResult.aiSummary}
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
@@ -853,7 +684,7 @@ export default function ResumesPage() {
                     <AlertCircle className="h-3 w-3" /> 待确认
                   </p>
                   <div className="flex flex-wrap gap-1">
-                    {parsedResult.uncertainSkills.map((s) => (
+                    {parsedResult.unmatchedSkills.map((s) => (
                       <span key={s} className="rounded-md bg-amber-500/10 px-1.5 md:px-2 py-0.5 text-[10px] md:text-[11px] text-amber-400 border border-amber-500/20">
                         {s}
                       </span>
@@ -862,94 +693,10 @@ export default function ResumesPage() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <button
-                  onClick={async () => {
-                    if (!parsedResult) return;
-                    try {
-                      const res = await fetch('/api/candidates', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          name: parsedResult.name,
-                          email: parsedResult.email || '',
-                          phone: parsedResult.phone || '',
-                          education: parsedResult.education,
-                          school: parsedResult.school,
-                          experience: parsedResult.experience,
-                          skills: parsedResult.matchedSkills,
-                          appliedPosition: parsedResult.position,
-                          matchScore: parsedResult.matchScore,
-                          resumeFileKey: parsedResult.resumeFileKey || '',
-                          resumeParsed: parsedResult,
-                          source: 'ai',
-                        }),
-                      });
-                      const data = await res.json();
-                      if (data.code === 0) {
-                        // Add to local candidates list
-                        const newCandidate: Candidate = {
-                          id: data.data.id,
-                          name: parsedResult.name,
-                          position: parsedResult.position,
-                          status: 'new' as const,
-                          appliedAt: new Date().toISOString().split('T')[0],
-                          avatar: parsedResult.name.charAt(0),
-                          avatarColor: 'bg-gradient-to-br from-sky-500/20 to-blue-600/20 text-sky-400 border border-sky-500/20',
-                          matchScore: parsedResult.matchScore,
-                          isAIRecommended: true,
-                          skills: parsedResult.matchedSkills || [],
-                          email: parsedResult.email || '',
-                          phone: parsedResult.phone || '',
-                          education: parsedResult.education || '',
-                          school: parsedResult.school || '',
-                          major: '',
-                          department: '',
-                          experience: typeof parsedResult.experience === 'number' ? parsedResult.experience : 0,
-                          company: parsedResult.company,
-                          resumeFileKey: parsedResult.resumeFileKey,
-                          resumeParsed: parsedResult,
-                          matchedSkills: parsedResult.matchedSkills || [],
-                          unmatchedSkills: parsedResult.uncertainSkills || [],
-                          workHistory: [],
-                          source: 'ai',
-                          tags: [],
-                        };
-                        setCandidates(prev => [newCandidate, ...prev]);
-                        setParsedResult(null);
-                      } else {
-                        alert(data.message || '添加失败');
-                      }
-                    } catch {
-                      alert('添加候选人失败，请重试');
-                    }
-                  }}
-                  className="flex h-8 items-center gap-1.5 rounded-lg bg-sky-500 px-3 text-xs font-medium text-white hover:bg-sky-600 transition-colors"
-                >
+                <button onClick={() => alert('已加入候选人池')} className="flex h-8 items-center gap-1.5 rounded-lg bg-sky-500 px-3 text-xs font-medium text-white hover:bg-sky-600 transition-colors">
                   <Check className="h-3.5 w-3.5" /> 加入候选人池
                 </button>
-                <button
-                  onClick={() => {
-                    if (!parsedResult) return;
-                    setDetailCandidate({
-                      name: parsedResult.name,
-                      email: parsedResult.email,
-                      phone: parsedResult.phone,
-                      education: parsedResult.education,
-                      school: parsedResult.school,
-                      experience: parsedResult.experience,
-                      currentCompany: parsedResult.company,
-                      currentPosition: parsedResult.position,
-                      matchScore: parsedResult.matchScore,
-                      aiSummary: parsedResult.summary,
-                      resumeFileKey: parsedResult.resumeFileKey,
-                      resumeParsed: parsedResult,
-                      status: 'new',
-                      source: 'ai',
-                    });
-                    setShowDetailModal(true);
-                  }}
-                  className="flex h-8 items-center gap-1.5 rounded-lg border border-[#1e293b] px-3 text-xs text-slate-400 hover:text-white transition-colors"
-                >
+                <button onClick={() => alert('查看详情功能开发中')} className="flex h-8 items-center gap-1.5 rounded-lg border border-[#1e293b] px-3 text-xs text-slate-400 hover:text-white transition-colors">
                   <Eye className="h-3.5 w-3.5" /> 查看详情
                 </button>
               </div>
@@ -996,44 +743,8 @@ export default function ResumesPage() {
         filteredCandidates.map((candidate) => (
           <div
             key={candidate.id}
-            className="card-hover rounded-xl border border-[#1e293b] bg-[#111827] overflow-hidden relative"
+            className="card-hover rounded-xl border border-[#1e293b] bg-[#111827] overflow-hidden"
           >
-            {/* Pipeline Progress Bar */}
-            <div className="flex h-1">
-              {['new', 'screening', 'interview', 'offer', 'hired'].map((stage) => {
-                const stageIndex = ['new', 'screening', 'interview', 'offer', 'hired'].indexOf(stage);
-                const currentIndex = ['new', 'screening', 'interview', 'offer', 'hired'].indexOf(candidate.status);
-                const isCompleted = stageIndex < currentIndex;
-                const isCurrent = stageIndex === currentIndex;
-                const isRejected = candidate.status === 'rejected';
-                return (
-                  <div
-                    key={stage}
-                    className={cn(
-                      'flex-1 transition-all duration-500',
-                      isRejected ? 'bg-red-500/30' :
-                      isCompleted ? 'bg-emerald-500' :
-                      isCurrent ? 'bg-sky-400' :
-                      'bg-[#1e293b]'
-                    )}
-                  />
-                );
-              })}
-            </div>
-            {/* Selection checkbox */}
-            <div className="absolute top-3 left-3 z-10">
-              <button
-                onClick={(e) => { e.stopPropagation(); toggleSelect(candidate.id); }}
-                className={cn(
-                  'flex h-5 w-5 items-center justify-center rounded border-2 transition-all',
-                  selectedIds.has(candidate.id)
-                    ? 'border-orange-500 bg-orange-500 text-white'
-                    : 'border-[#334155] bg-transparent hover:border-slate-400'
-                )}
-              >
-                {selectedIds.has(candidate.id) && <Check className="h-3 w-3" />}
-              </button>
-            </div>
             <div className="p-3 md:p-4">
               <div className="flex items-start gap-2.5 md:gap-3">
                 <div className={cn(
@@ -1102,12 +813,41 @@ export default function ResumesPage() {
             {/* Expanded Details */}
             {expandedCandidate === candidate.id && (
               <div className="border-t border-[#1e293b] bg-[#0a0e1a]/50 p-3 md:p-4 space-y-3">
-                {/* 流程追踪区域 - 使用 PipelineTracker 组件 */}
-                <PipelineTracker 
-                  currentStatus={candidate.status} 
-                  candidateId={candidate.id}
-                  candidateName={candidate.name}
-                />
+                {/* 流程追踪区域 */}
+                <div className="rounded-lg border border-[#1e293b] bg-[#111827]/50 p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <GitBranch className="h-3.5 w-3.5 text-sky-400" />
+                    <p className="text-[11px] md:text-xs font-medium text-slate-300">流程追踪</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {candidate.status === 'hired' ? (
+                      <>
+                        <span className="flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] md:text-[11px] text-green-400">
+                          <CheckCircle className="h-3 w-3" /> 已完成入职
+                        </span>
+                        <a href="/contracts" className="text-[10px] md:text-[11px] text-sky-400 hover:underline">
+                          查看合同 →
+                        </a>
+                      </>
+                    ) : candidate.status === 'offer' ? (
+                      <span className="flex items-center gap-1 rounded-full bg-orange-500/10 px-2 py-0.5 text-[10px] md:text-[11px] text-orange-400">
+                        <FileText className="h-3 w-3" /> 待接受Offer
+                      </span>
+                    ) : candidate.status === 'interview' ? (
+                      <span className="flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] md:text-[11px] text-blue-400">
+                        <Calendar className="h-3 w-3" /> 面试中
+                      </span>
+                    ) : candidate.status === 'screening' ? (
+                      <span className="flex items-center gap-1 rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] md:text-[11px] text-purple-400">
+                        <Search className="h-3 w-3" /> 简历筛选中
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 rounded-full bg-slate-500/10 px-2 py-0.5 text-[10px] md:text-[11px] text-slate-400">
+                        <Clock className="h-3 w-3" /> 新简历
+                      </span>
+                    )}
+                  </div>
+                </div>
                 <div>
                   <p className="text-[11px] md:text-xs font-medium text-slate-400 mb-1">AI 评估摘要</p>
                   <p className="text-[11px] md:text-xs leading-relaxed text-slate-300">{candidate.aiSummary}</p>
@@ -1284,47 +1024,10 @@ export default function ResumesPage() {
             {/* Footer */}
             <div className="flex items-center justify-between border-t border-[#1e293b] bg-[#0a0e1a]/30 px-3 md:px-4 py-2">
               <button
-                onClick={() => {
-                  setDetailCandidate({
-                    id: candidate.id,
-                    name: candidate.name,
-                    email: candidate.email,
-                    phone: candidate.phone,
-                    education: candidate.education,
-                    school: candidate.school,
-                    experience: candidate.experience,
-                    currentCompany: candidate.company,
-                    currentPosition: candidate.position,
-                    matchScore: candidate.matchScore,
-                    aiSummary: candidate.aiSummary,
-                    skills: candidate.skills,
-                    resumeFileKey: candidate.resumeFileKey,
-                    resumeParsed: candidate.resumeParsed,
-                    status: candidate.status,
-                    source: candidate.source || 'manual',
-                    tags: candidate.tags,
-                    appliedPosition: candidate.position,
-                  });
-                  setShowDetailModal(true);
-                }}
+                onClick={() => setExpandedCandidate(expandedCandidate === candidate.id ? null : candidate.id)}
                 className="text-[11px] md:text-xs text-slate-500 hover:text-sky-400 cursor-pointer transition-colors"
               >
                 {expandedCandidate === candidate.id ? '收起详情' : '展开详情'}
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDeleteCandidate(candidate.id, candidate.name);
-                }}
-                disabled={actionLoading === candidate.id}
-                className="text-[11px] md:text-xs text-slate-600 hover:text-red-400 cursor-pointer transition-colors disabled:opacity-50"
-                title="删除简历"
-              >
-                {actionLoading === candidate.id ? (
-                  <><div className="h-3 w-3 rounded-full border-2 border-red-400/30 border-t-red-400 animate-spin inline-block" /></>
-                ) : (
-                  <Trash2 className="h-3 w-3 inline" />
-                )}
               </button>
               <div className="flex items-center gap-0.5">
                 {[1, 2, 3, 4, 5].map((star) => (
@@ -1396,14 +1099,6 @@ export default function ResumesPage() {
               重置
             </button>
           </div>
-        </div>
-      </Modal>
-
-      {/* Resume Collection Modal */}
-      <Modal isOpen={showCollectionModal} onClose={() => setShowCollectionModal(false)} title="简历采集" size="lg">
-        <div className="space-y-2">
-          <p className="text-xs text-slate-500">从邮箱拖拽邮件或粘贴简历内容，AI 自动提取候选人信息</p>
-          <EmailImport />
         </div>
       </Modal>
 
@@ -1758,6 +1453,9 @@ export default function ResumesPage() {
         />
       )}
 
+      {/* AI JD Modal */}
+      <AIJDModal isOpen={showAIJDModal} onClose={() => setShowAIJDModal(false)} />
+
       {/* Duplicate Detection Modal */}
       <Modal isOpen={!!duplicateInfo} onClose={() => setDuplicateInfo(null)} title="检测到重复候选人">
         <div className="space-y-4">
@@ -1818,59 +1516,6 @@ export default function ResumesPage() {
         </div>
       </Modal>
 
-      {/* Batch Add to Candidate Pool Modal */}
-      <Modal isOpen={showBatchPoolModal} onClose={() => setShowBatchPoolModal(false)} title="批量添加到候选人池">
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 rounded-lg bg-orange-500/5 border border-orange-500/20 p-3">
-            <UserCheck className="h-4 w-4 text-orange-400 shrink-0" />
-            <p className="text-xs text-orange-400">将 {selectedIds.size} 位候选人批量添加到候选人池</p>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1.5">状态</label>
-            <select
-              value={batchPoolForm.status}
-              onChange={e => setBatchPoolForm(prev => ({ ...prev, status: e.target.value }))}
-              className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none"
-            >
-              <option value="active">活跃</option>
-              <option value="reserve">储备</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1.5">技能标签（逗号分隔，可选）</label>
-            <input
-              type="text"
-              value={batchPoolForm.skillTags}
-              onChange={e => setBatchPoolForm(prev => ({ ...prev, skillTags: e.target.value }))}
-              className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 placeholder:text-slate-600 focus:border-sky-500/50 focus:outline-none"
-              placeholder="React, TypeScript, Node.js"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1.5">备注（可选）</label>
-            <textarea
-              value={batchPoolForm.notes}
-              onChange={e => setBatchPoolForm(prev => ({ ...prev, notes: e.target.value }))}
-              className="w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-sm text-slate-300 placeholder:text-slate-600 focus:border-sky-500/50 focus:outline-none"
-              rows={3}
-              placeholder="添加备注信息..."
-            />
-          </div>
-          <div className="flex gap-2 pt-2">
-            <button
-              onClick={handleBatchAddToPool}
-              disabled={batchPoolLoading}
-              className="flex-1 h-9 rounded-lg bg-orange-500 text-sm font-medium text-white hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {batchPoolLoading ? '添加中...' : `确认添加 ${selectedIds.size} 人`}
-            </button>
-            <button onClick={() => setShowBatchPoolModal(false)} className="flex-1 h-9 rounded-lg border border-[#1e293b] text-sm text-slate-400 hover:text-white transition-colors">
-              取消
-            </button>
-          </div>
-        </div>
-      </Modal>
-
       {/* AI Candidate Profile Modal */}
       <Modal
         isOpen={showAIProfileModal}
@@ -1897,24 +1542,6 @@ export default function ResumesPage() {
           />
         )}
       </Modal>
-
-      {/* Candidate Detail Modal */}
-      {showDetailModal && detailCandidate && (
-        <CandidateDetailModal
-          isOpen={showDetailModal}
-          onClose={() => { setShowDetailModal(false); setDetailCandidate(null); }}
-          candidate={detailCandidate as {
-            id: string; name: string; email?: string | null; phone?: string | null;
-            education?: string | null; school?: string | null; major?: string | null;
-            experience?: number | null; currentCompany?: string | null; currentPosition?: string | null;
-            skills?: string | string[]; resumeUrl?: string | null; resumeFileKey?: string | null;
-            resumeParsed?: string | Record<string, unknown>; status?: string;
-            matchScore?: number | null; aiSummary?: string | null;
-            appliedPosition?: string | null; department?: string | null;
-            source?: string; tags?: string | string[]; createdAt?: string;
-          }}
-        />
-      )}
     </div>
   );
 }

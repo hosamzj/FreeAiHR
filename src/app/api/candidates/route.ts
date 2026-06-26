@@ -39,7 +39,6 @@ export async function GET(request: NextRequest) {
       skills: JSON.parse(c.skills || '[]'),
       tags: JSON.parse(c.tags || '[]'),
       resumeParsed: JSON.parse(c.resumeParsed || '{}'),
-      resumeFileKey: c.resumeFileKey,
     })),
     total,
     page,
@@ -55,7 +54,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { name, email, phone, education, school, skills, appliedPosition, department, experience, matchScore, resumeFileKey, resumeParsed, source } = body;
+    const { name, email, phone, education, school, skills, appliedPosition, department, experience } = body;
 
     if (!name) return badRequest('姓名不能为空');
 
@@ -79,10 +78,7 @@ export async function POST(request: NextRequest) {
         appliedPosition: appliedPosition || null,
         department: department || null,
         status: 'new',
-        matchScore: matchScore || Math.floor(Math.random() * 40) + 60,
-        resumeFileKey: resumeFileKey || null,
-        resumeParsed: resumeParsed ? JSON.stringify(resumeParsed) : '{}',
-        source: source || 'manual',
+        matchScore: Math.floor(Math.random() * 40) + 60, // Simulated AI score
       },
     });
 

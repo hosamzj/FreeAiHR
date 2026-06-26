@@ -7,7 +7,7 @@
 - **Language**: TypeScript 5
 - **UI 组件**: shadcn/ui (基于 Radix UI)
 - **Styling**: Tailwind CSS 4
-- **Database**: PostgreSQL + Prisma ORM
+- **Database**: SQLite + Prisma ORM
 - **Auth**: JWT (httpOnly cookie) + bcrypt
 
 ## 目录结构
@@ -28,19 +28,15 @@
 │   │   │   ├── analysis/   # 面试过程AI分析
 │   │   │   ├── offers/     # Offer智能生成与审批
 │   │   │   ├── users/      # 用户管理（admin专属）
-│   │   │   ├── templates/  # 岗位模板库（AI生成+类别管理）
 │   │   │   └── settings/   # 系统设置（admin专属）
 │   │   ├── api/            # 后端API路由
 │   │   │   ├── auth/       # 认证（登录/登出/SSO/SMS）
 │   │   │   ├── users/      # 用户CRUD
 │   │   │   ├── dashboard/  # 看板数据
-│   │   │   ├── candidates/ # 候选人管理（含简历解析/邮箱导入）
+│   │   │   ├── candidates/ # 候选人管理
 │   │   │   ├── interviews/ # 面试管理
 │   │   │   ├── offers/     # Offer管理
 │   │   │   ├── positions/  # 职位管理
-│   │   │   ├── position-templates/ # 岗位模板CRUD
-│   │   │   ├── position-categories/ # 岗位类别管理
-│   │   │   ├── ai/         # AI服务（JD生成/面试问题/匹配评分/薪资建议/配置）
 │   │   │   ├── notifications/ # 通知
 │   │   │   └── system/     # 系统配置（SSO/密码策略/基础配置）
 │   │   ├── login/          # 登录页
