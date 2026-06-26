@@ -225,6 +225,18 @@ export async function POST(
         return success({ candidate: updated, reason, action: 'rejected' });
       }
 
+      case 'reactivate': {
+        // 重新激活已淘汰的候选人
+        if (candidate.status !== 'rejected') {
+          return error(422, '只能对"已淘汰"状态的候选人执行此操作');
+        }
+        const updated = await prisma.candidate.update({
+          where: { id },
+          data: { status: 'screening' },
+        });
+        return success({ candidate: updated, action: 'reactivated' });
+      }
+
       default:
         return error(422, `未知操作: ${action}`);
     }

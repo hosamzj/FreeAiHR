@@ -282,7 +282,7 @@ export default function ResumesPage() {
       const res = await fetch(`/api/candidates/${candidateId}/pipeline`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'pass_screening' }),
+        body: JSON.stringify({ action: 'screen' }),
       });
       const data = await res.json();
       if (data.code === 0) {
@@ -514,7 +514,7 @@ export default function ResumesPage() {
       const res = await fetch(`/api/candidates/${selectedCandidate}/pipeline`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'send_offer' }),
+        body: JSON.stringify({ action: 'generate_offer' }),
       });
       const data = await res.json();
       if (data.code === 0) {
@@ -581,7 +581,7 @@ export default function ResumesPage() {
       const res = await fetch(`/api/candidates/${selectedCandidate}/pipeline`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'reject_offer', reason }),
+        body: JSON.stringify({ action: 'reject', reason }),
       });
       const data = await res.json();
       if (data.code === 0) {
