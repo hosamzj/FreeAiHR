@@ -8,6 +8,7 @@ import { Modal } from '@/components/ui/modal';
 interface AIJDModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onGenerate?: (result: JDResult & { industry: string; experience: string; salaryRange: string; skills: string }) => void;
 }
 
 interface JDResult {
@@ -19,7 +20,7 @@ interface JDResult {
   benefits: string[];
 }
 
-export function AIJDModal({ isOpen, onClose }: AIJDModalProps) {
+export function AIJDModal({ isOpen, onClose, onGenerate }: AIJDModalProps) {
   const [step, setStep] = useState<'form' | 'loading' | 'result'>('form');
   const [form, setForm] = useState({
     positionName: '',
@@ -53,6 +54,7 @@ export function AIJDModal({ isOpen, onClose }: AIJDModalProps) {
       if (data.code === 0 && data.data) {
         setResult(data.data);
         setStep('result');
+        onGenerate?.(data.data);
       } else {
         alert(data.message || '生成失败');
         setStep('form');

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ClipboardList, Plus, Sparkles, RefreshCw, Edit2, Trash2 } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
+import { AIJDModal } from '@/components/ai-jd-modal';
 
 interface Template {
   id: string;
@@ -31,9 +32,10 @@ export default function TemplatesPage() {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
   const [newTemplate, setNewTemplate] = useState({ category: 'tech', title: '', description: '', requirements: '', industry: '' });
-  const [aiPrompt, setAiPrompt] = useState('');
-  const [aiIndustry, setAiIndustry] = useState('互联网/IT');
+  const [saving, setSaving] = useState(false);
 
   const loadTemplates = useCallback(async () => {
     try {
@@ -52,6 +54,8 @@ export default function TemplatesPage() {
   }, [loadTemplates]);
 
   const handleAdd = async () => {
+    if (!newTemplate.title.trim()) return;
+    setSaving(true);
     try {
       const res = await fetch('/api/position-templates', {
         method: 'POST',
@@ -65,6 +69,36 @@ export default function TemplatesPage() {
       }
     } catch (e) {
       console.error('Add template error:', e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEdit = async () => {
+    if (!editingTemplate) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/position-templates', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingTemplate.id,
+          category: editingTemplate.category,
+          title: editingTemplate.title,
+          description: editingTemplate.description,
+          requirements: editingTemplate.requirements,
+          industry: editingTemplate.industry,
+        }),
+      });
+      if (res.ok) {
+        setShowEditModal(false);
+        setEditingTemplate(null);
+        loadTemplates();
+      }
+    } catch (e) {
+      console.error('Edit template error:', e);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -78,26 +112,43 @@ export default function TemplatesPage() {
     }
   };
 
-  const handleAIGenerate = async () => {
+  // AI 生成完成后自动创建模板
+  const handleAIGenerated = async (jdData: {
+    positionName: string;
+    department: string;
+    responsibilities: string[];
+    requirements: string[];
+    preferred: string[];
+    benefits: string[];
+    industry: string;
+    experience: string;
+    salaryRange: string;
+    skills: string;
+  }) => {
     try {
-      const res = await fetch('/api/ai/generate-jd', {
+      const res = await fetch('/api/position-templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ positionName: aiPrompt, department: '', industry: aiIndustry }),
+        body: JSON.stringify({
+          category: 'tech',
+          title: jdData.positionName || 'AI生成岗位',
+          description: jdData.responsibilities?.join('\n') || '',
+          requirements: jdData.requirements?.join('\n') || '',
+          industry: jdData.industry || '',
+        }),
       });
-      const data = await res.json();
-      if (data.data) {
-        setNewTemplate({
-          ...newTemplate,
-          description: data.data.responsibilities?.join('\n') || '',
-          requirements: data.data.requirements?.join('\n') || '',
-        });
+      if (res.ok) {
         setShowAIModal(false);
-        setShowAddModal(true);
+        loadTemplates();
       }
     } catch (e) {
-      console.error('AI generate error:', e);
+      console.error('Auto-create template error:', e);
     }
+  };
+
+  const openEditModal = (t: Template) => {
+    setEditingTemplate({ ...t });
+    setShowEditModal(true);
   };
 
   const getCategoryLabel = (cat: string) => CATEGORIES.find(c => c.value === cat)?.label || cat;
@@ -163,18 +214,35 @@ export default function TemplatesPage() {
           </div>
         ) : (
           templates.map(t => (
-            <div key={t.id} className="rounded-xl border border-[#1e293b] bg-[#111827] p-4 hover:border-sky-500/30">
+            <div
+              key={t.id}
+              onClick={() => openEditModal(t)}
+              className="group cursor-pointer rounded-xl border border-[#1e293b] bg-[#111827] p-4 transition-all duration-200 hover:border-sky-500/30 hover:shadow-lg hover:shadow-sky-500/5"
+            >
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
                   <ClipboardList className="h-5 w-5 text-sky-400" />
                   <span className="rounded bg-sky-500/10 px-2 py-0.5 text-xs text-sky-400">
                     {getCategoryLabel(t.category)}
                   </span>
+                  {t.industry && (
+                    <span className="rounded bg-orange-500/10 px-2 py-0.5 text-xs text-orange-400">
+                      {t.industry}
+                    </span>
+                  )}
                 </div>
-                <div className="flex gap-1">
+                <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                   <button
-                    onClick={() => handleDelete(t.id)}
+                    onClick={(e) => { e.stopPropagation(); openEditModal(t); }}
+                    className="rounded p-1 text-slate-500 hover:bg-sky-500/10 hover:text-sky-400"
+                    title="编辑"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }}
                     className="rounded p-1 text-slate-500 hover:bg-red-500/10 hover:text-red-400"
+                    title="删除"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -187,7 +255,6 @@ export default function TemplatesPage() {
               <div className="mt-3 flex items-center gap-4 text-xs text-slate-500">
                 <span>版本 v{t.version}</span>
                 <span>使用 {t.usageCount} 次</span>
-                {t.industry && <span>{t.industry}</span>}
               </div>
             </div>
           ))
@@ -248,50 +315,92 @@ export default function TemplatesPage() {
           </div>
           <button
             onClick={handleAdd}
-            className="w-full rounded-lg bg-sky-500 py-2 text-white hover:bg-sky-600"
+            disabled={saving || !newTemplate.title.trim()}
+            className="w-full rounded-lg bg-sky-500 py-2 text-white hover:bg-sky-600 disabled:opacity-50"
           >
-            创建模板
+            {saving ? '创建中...' : '创建模板'}
           </button>
         </div>
       </Modal>
 
-      {/* AI Generate Modal */}
-      <Modal isOpen={showAIModal} onClose={() => setShowAIModal(false)} title="AI生成岗位模板">
-        <div className="space-y-4">
-          <div>
-            <label className="text-sm text-slate-400">描述您需要的岗位</label>
-            <textarea
-              value={aiPrompt}
-              onChange={e => setAiPrompt(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
-              rows={4}
-              placeholder="例如：高级前端工程师，负责核心业务系统的前端架构设计和开发..."
-            />
+      {/* Edit Modal */}
+      <Modal isOpen={showEditModal} onClose={() => { setShowEditModal(false); setEditingTemplate(null); }} title="编辑岗位模板">
+        {editingTemplate && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm text-slate-400">岗位类别</label>
+                <select
+                  value={editingTemplate.category}
+                  onChange={e => setEditingTemplate({ ...editingTemplate, category: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
+                >
+                  {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm text-slate-400">行业</label>
+                <input
+                  type="text"
+                  value={editingTemplate.industry || ''}
+                  onChange={e => setEditingTemplate({ ...editingTemplate, industry: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-sm text-slate-400">岗位名称</label>
+              <input
+                type="text"
+                value={editingTemplate.title}
+                onChange={e => setEditingTemplate({ ...editingTemplate, title: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-slate-400">岗位职责</label>
+              <textarea
+                value={editingTemplate.description || ''}
+                onChange={e => setEditingTemplate({ ...editingTemplate, description: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
+                rows={4}
+              />
+            </div>
+            <div>
+              <label className="text-sm text-slate-400">任职要求</label>
+              <textarea
+                value={editingTemplate.requirements || ''}
+                onChange={e => setEditingTemplate({ ...editingTemplate, requirements: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
+                rows={4}
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { handleDelete(editingTemplate.id); setShowEditModal(false); setEditingTemplate(null); }}
+                className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-400 hover:bg-red-500/20"
+              >
+                <Trash2 className="mr-1 inline h-4 w-4" />
+                删除
+              </button>
+              <button
+                onClick={handleEdit}
+                disabled={saving}
+                className="flex-1 rounded-lg bg-sky-500 py-2 text-white hover:bg-sky-600 disabled:opacity-50"
+              >
+                {saving ? '保存中...' : '保存修改'}
+              </button>
+            </div>
           </div>
-          <div>
-            <label className="text-sm text-slate-400">行业类型</label>
-            <select
-              value={aiIndustry}
-              onChange={e => setAiIndustry(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
-            >
-              {['互联网/IT','金融','电商','教育','医疗','制造','房地产','物流','能源','广告/传媒','游戏','AI/人工智能','SaaS/企业服务','汽车','消费品/零售'].map(i => (
-                <option key={i} value={i}>{i}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center gap-2 rounded-lg bg-sky-500/10 p-3">
-            <Sparkles className="h-4 w-4 text-sky-400" />
-            <span className="text-xs text-sky-400">AI将根据岗位描述和行业类型自动生成岗位职责和任职要求</span>
-          </div>
-          <button
-            onClick={handleAIGenerate}
-            className="w-full rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 py-2 text-white hover:from-sky-600 hover:to-blue-700"
-          >
-            生成模板
-          </button>
-        </div>
+        )}
       </Modal>
+
+      {/* AI Generate Modal */}
+      <AIJDModal
+        isOpen={showAIModal}
+        onClose={() => setShowAIModal(false)}
+        onGenerate={handleAIGenerated}
+      />
     </div>
   );
 }

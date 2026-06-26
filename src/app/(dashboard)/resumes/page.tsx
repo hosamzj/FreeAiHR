@@ -58,7 +58,6 @@ interface ParsedResumeData {
 }
 import { Modal } from '@/components/ui/modal';
 import { ResumePreviewModal } from '@/components/resume-preview-modal';
-import { AIJDModal } from '@/components/ai-jd-modal';
 import { AICandidateProfile } from '@/components/ai-candidate-profile';
 
 type CandidateStatus = 'new' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected';
@@ -83,7 +82,6 @@ export default function ResumesPage() {
   const [resumePreviewData, setResumePreviewData] = useState<{ id: string; name: string; position?: string; resumeUrl?: string } | null>(null);
 
   // AI features state
-  const [showAIJDModal, setShowAIJDModal] = useState(false);
   const [showAIProfileModal, setShowAIProfileModal] = useState(false);
   const [aiProfileCandidate, setAiProfileCandidate] = useState<{ id: string; name: string; position?: string } | null>(null);
 
@@ -631,14 +629,6 @@ export default function ResumesPage() {
           </button>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowAIJDModal(true)}
-            className="flex h-9 items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2.5 text-sm text-sky-400 hover:bg-sky-500/20 transition-colors sm:px-3"
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">AI生成JD</span>
-            <span className="sm:hidden">JD</span>
-          </button>
           <button
             onClick={() => setShowImportModal(true)}
             className="flex h-9 items-center gap-1.5 rounded-lg border border-[#1e293b] bg-[#111827] px-2.5 text-sm text-slate-400 hover:text-white transition-colors sm:px-3"
@@ -1558,8 +1548,7 @@ export default function ResumesPage() {
         />
       )}
 
-      {/* AI JD Modal */}
-      <AIJDModal isOpen={showAIJDModal} onClose={() => setShowAIJDModal(false)} />
+
 
       {/* Duplicate Detection Modal */}
       <Modal isOpen={!!duplicateInfo} onClose={() => setDuplicateInfo(null)} title="检测到重复候选人">
