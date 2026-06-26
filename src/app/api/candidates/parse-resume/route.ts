@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { success, error } from '@/lib/auth';
 import { parseResume, parseResumeFromImage } from '@/lib/ai';
 import { S3Storage } from 'coze-coding-dev-sdk';
+import mammoth from 'mammoth';
 
 const storage = new S3Storage({
   endpointUrl: process.env.COZE_BUCKET_ENDPOINT_URL,
@@ -121,12 +122,30 @@ export async function POST(request: NextRequest) {
           const base64 = buffer.toString('base64');
           aiParsed = await parseResumeFromImage(base64, 'image/png');
         }
+      } else if (
+        mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+        mimeType === 'application/msword' ||
+        fileName.endsWith('.docx') ||
+        fileName.endsWith('.doc')
+      ) {
+        // Word 文档：用 mammoth 提取纯文本
+        const extractResult = await mammoth.extractRawText({ buffer });
+        const extractedText = extractResult.value || '';
+        if (extractedText.replace(/[^a-zA-Z\u4e00-\u9fff]/g, '').length > 20) {
+          aiParsed = await parseResume(extractedText);
+        } else {
+          return error(422, '无法从Word文档中提取文字内容，请确保文档包含文本而非图片');
+        }
+        // 记录 mammoth 警告
+        if (extractResult.messages.length > 0) {
+          console.warn('[Resume] Mammoth warnings:', extractResult.messages);
+        }
       } else {
         const text = buffer.toString('utf-8');
         if (text.replace(/[^a-zA-Z\u4e00-\u9fff]/g, '').length > 20) {
           aiParsed = await parseResume(text);
         } else {
-          return error(422, '不支持的文件格式，请上传 PDF、图片或文本文件');
+          return error(422, '不支持的文件格式，请上传 PDF、Word、图片或文本文件');
         }
       }
 

@@ -30,6 +30,7 @@ import {
   GitBranch,
   CheckCircle,
   Mail,
+  Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { mockCandidates, type Candidate } from '@/lib/mock-data';
@@ -580,6 +581,24 @@ export default function ResumesPage() {
       alert(`${candidateName} 已重新激活`);
     } catch (error) {
       alert('操作失败，请重试');
+    } finally {
+      setActionLoading(null);
+    }
+  }, []);
+
+  const handleDeleteCandidate = useCallback(async (candidateId: string, candidateName: string) => {
+    if (!confirm(`确定要删除 ${candidateName} 的简历吗？此操作不可撤销。`)) return;
+    setActionLoading(candidateId);
+    try {
+      const res = await fetch(`/api/candidates/${candidateId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.code === 0) {
+        setCandidates(prev => prev.filter(c => c.id !== candidateId));
+      } else {
+        alert(data.message || '删除失败');
+      }
+    } catch {
+      alert('删除失败，请重试');
     } finally {
       setActionLoading(null);
     }
@@ -1257,6 +1276,21 @@ export default function ResumesPage() {
                 className="text-[11px] md:text-xs text-slate-500 hover:text-sky-400 cursor-pointer transition-colors"
               >
                 {expandedCandidate === candidate.id ? '收起详情' : '展开详情'}
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteCandidate(candidate.id, candidate.name);
+                }}
+                disabled={actionLoading === candidate.id}
+                className="text-[11px] md:text-xs text-slate-600 hover:text-red-400 cursor-pointer transition-colors disabled:opacity-50"
+                title="删除简历"
+              >
+                {actionLoading === candidate.id ? (
+                  <><div className="h-3 w-3 rounded-full border-2 border-red-400/30 border-t-red-400 animate-spin inline-block" /></>
+                ) : (
+                  <Trash2 className="h-3 w-3 inline" />
+                )}
               </button>
               <div className="flex items-center gap-0.5">
                 {[1, 2, 3, 4, 5].map((star) => (
