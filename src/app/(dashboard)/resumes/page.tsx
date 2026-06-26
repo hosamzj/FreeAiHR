@@ -30,6 +30,9 @@ import {
   GitBranch,
   CheckCircle,
   ExternalLink,
+  Trash2,
+  Archive,
+  UserPlus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { mockCandidates } from '@/lib/mock-data';
@@ -600,6 +603,38 @@ export default function ResumesPage() {
     }
   }, []);
 
+  // Move rejected candidate to candidate pool
+  const handleMoveToPool = useCallback(async (candidateId: string) => {
+    if (!confirm('确定将该候选人转入候选人池？转入后将从简历管理列表中移除。')) return;
+    setActionLoading(candidateId);
+    try {
+      const res = await fetch(`/api/candidates/${candidateId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'pool' }),
+      });
+      if (res.ok) {
+        setCandidates(prev => prev.filter(c => c.id !== candidateId));
+      }
+    } finally {
+      setActionLoading(null);
+    }
+  }, []);
+
+  // Delete candidate permanently
+  const handleDeleteCandidate = useCallback(async (candidateId: string) => {
+    if (!confirm('确定永久删除该候选人？此操作不可撤销。')) return;
+    setActionLoading(candidateId);
+    try {
+      const res = await fetch(`/api/candidates/${candidateId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setCandidates(prev => prev.filter(c => c.id !== candidateId));
+      }
+    } finally {
+      setActionLoading(null);
+    }
+  }, []);
+
   // Filter candidates based on active tab
   const filteredCandidates = candidates.filter(candidate => {
     if (activeTab === 'all') return true;
@@ -1115,19 +1150,35 @@ export default function ResumesPage() {
                     </div>
                   )}
 
-                  {/* 已淘汰 → 重新激活 */}
+                  {/* 已淘汰 → 重新激活 / 转入候选人池 / 删除 */}
                   {candidate.status === 'rejected' && (
-                    <button
-                      onClick={() => handleReactivate(candidate.id, candidate.name)}
-                      disabled={actionLoading === candidate.id}
-                      className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-sky-500/20 px-2.5 md:px-3 text-[11px] md:text-xs text-sky-400 hover:bg-sky-500/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
-                    >
-                      {actionLoading === candidate.id ? (
-                        <><div className="h-3 w-3 rounded-full border-2 border-sky-400/30 border-t-sky-400 animate-spin" /> 处理中...</>
-                      ) : (
-                        <><RotateCcw className="h-3 w-3" /> 重新激活</>
-                      )}
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => handleReactivate(candidate.id, candidate.name)}
+                        disabled={actionLoading === candidate.id}
+                        className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-sky-500/20 px-2 md:px-2.5 text-[11px] md:text-xs text-sky-400 hover:bg-sky-500/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                      >
+                        {actionLoading === candidate.id ? (
+                          <><div className="h-3 w-3 rounded-full border-2 border-sky-400/30 border-t-sky-400 animate-spin" /> 处理中...</>
+                        ) : (
+                          <><RotateCcw className="h-3 w-3" /> 重新激活</>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleMoveToPool(candidate.id)}
+                        disabled={actionLoading === candidate.id}
+                        className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-amber-500/20 px-2 md:px-2.5 text-[11px] md:text-xs text-amber-400 hover:bg-amber-500/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                      >
+                        <UserPlus className="h-3 w-3" /> 转入池
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCandidate(candidate.id)}
+                        disabled={actionLoading === candidate.id}
+                        className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-red-500/20 px-2 md:px-2.5 text-[11px] md:text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                      >
+                        <Trash2 className="h-3 w-3" /> 删除
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
