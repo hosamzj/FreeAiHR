@@ -284,13 +284,17 @@ export default function TemplatesPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm text-slate-400">岗位类别</label>
-              <select
+              <input
+                type="text"
                 value={newTemplate.category}
                 onChange={e => setNewTemplate({ ...newTemplate, category: e.target.value })}
                 className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
-              >
-                {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-              </select>
+                placeholder="如：技术、产品、设计..."
+                list="category-suggestions-add"
+              />
+              <datalist id="category-suggestions-add">
+                {CATEGORIES.map(c => <option key={c.value} value={c.label} />)}
+              </datalist>
             </div>
             <div>
               <label className="text-sm text-slate-400">行业类型</label>
@@ -360,13 +364,17 @@ export default function TemplatesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm text-slate-400">岗位类别</label>
-                <select
+                <input
+                  type="text"
                   value={editingTemplate.category}
                   onChange={e => setEditingTemplate({ ...editingTemplate, category: e.target.value })}
                   className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
-                >
-                  {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                </select>
+                  placeholder="如：技术、产品、设计..."
+                  list="category-suggestions-edit"
+                />
+                <datalist id="category-suggestions-edit">
+                  {CATEGORIES.map(c => <option key={c.value} value={c.label} />)}
+                </datalist>
               </div>
               <div>
                 <label className="text-sm text-slate-400">行业类型</label>
