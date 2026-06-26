@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ClipboardList, Plus, Sparkles, RefreshCw, Edit2, Trash2 } from 'lucide-react';
+import { ClipboardList, Plus, Sparkles, RefreshCw, Edit2, Trash2, Building2 } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
 import { AIJDModal } from '@/components/ai-jd-modal';
 
@@ -9,6 +9,7 @@ interface Template {
   id: string;
   category: string;
   title: string;
+  department?: string;
   description?: string;
   requirements?: string;
   industry?: string;
@@ -26,6 +27,14 @@ const CATEGORIES = [
   { value: 'management', label: '管理' },
 ];
 
+const INDUSTRIES = [
+  '互联网/IT', '金融/保险', '电商/零售', '教育/培训', '医疗/健康',
+  '制造/工业', '房地产/建筑', '物流/交通', '能源/环保', '广告/传媒',
+  '游戏/娱乐', '人工智能/AI', '企业服务/SaaS', '汽车/出行', '消费/生活服务',
+];
+
+const emptyTemplate = { category: 'tech', title: '', department: '', description: '', requirements: '', industry: '' };
+
 export default function TemplatesPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,7 +43,7 @@ export default function TemplatesPage() {
   const [showAIModal, setShowAIModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
-  const [newTemplate, setNewTemplate] = useState({ category: 'tech', title: '', description: '', requirements: '', industry: '' });
+  const [newTemplate, setNewTemplate] = useState(emptyTemplate);
   const [saving, setSaving] = useState(false);
 
   const loadTemplates = useCallback(async () => {
@@ -64,7 +73,7 @@ export default function TemplatesPage() {
       });
       if (res.ok) {
         setShowAddModal(false);
-        setNewTemplate({ category: 'tech', title: '', description: '', requirements: '', industry: '' });
+        setNewTemplate(emptyTemplate);
         loadTemplates();
       }
     } catch (e) {
@@ -85,6 +94,7 @@ export default function TemplatesPage() {
           id: editingTemplate.id,
           category: editingTemplate.category,
           title: editingTemplate.title,
+          department: editingTemplate.department,
           description: editingTemplate.description,
           requirements: editingTemplate.requirements,
           industry: editingTemplate.industry,
@@ -132,6 +142,7 @@ export default function TemplatesPage() {
         body: JSON.stringify({
           category: 'tech',
           title: jdData.positionName || 'AI生成岗位',
+          department: jdData.department || '',
           description: jdData.responsibilities?.join('\n') || '',
           requirements: jdData.requirements?.join('\n') || '',
           industry: jdData.industry || '',
@@ -220,7 +231,7 @@ export default function TemplatesPage() {
               className="group cursor-pointer rounded-xl border border-[#1e293b] bg-[#111827] p-4 transition-all duration-200 hover:border-sky-500/30 hover:shadow-lg hover:shadow-sky-500/5"
             >
               <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <ClipboardList className="h-5 w-5 text-sky-400" />
                   <span className="rounded bg-sky-500/10 px-2 py-0.5 text-xs text-sky-400">
                     {getCategoryLabel(t.category)}
@@ -249,6 +260,12 @@ export default function TemplatesPage() {
                 </div>
               </div>
               <h3 className="mt-3 font-medium text-white">{t.title}</h3>
+              {t.department && (
+                <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                  <Building2 className="h-3 w-3" />
+                  {t.department}
+                </p>
+              )}
               {t.description && (
                 <p className="mt-2 line-clamp-3 text-xs text-slate-400">{t.description}</p>
               )}
@@ -276,24 +293,37 @@ export default function TemplatesPage() {
               </select>
             </div>
             <div>
-              <label className="text-sm text-slate-400">行业</label>
-              <input
-                type="text"
+              <label className="text-sm text-slate-400">行业类型</label>
+              <select
                 value={newTemplate.industry}
                 onChange={e => setNewTemplate({ ...newTemplate, industry: e.target.value })}
                 className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
-                placeholder="互联网/金融/制造..."
-              />
+              >
+                <option value="">请选择行业</option>
+                {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
+              </select>
             </div>
           </div>
-          <div>
-            <label className="text-sm text-slate-400">岗位名称</label>
-            <input
-              type="text"
-              value={newTemplate.title}
-              onChange={e => setNewTemplate({ ...newTemplate, title: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm text-slate-400">岗位名称</label>
+              <input
+                type="text"
+                value={newTemplate.title}
+                onChange={e => setNewTemplate({ ...newTemplate, title: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-slate-400">所属部门</label>
+              <input
+                type="text"
+                value={newTemplate.department}
+                onChange={e => setNewTemplate({ ...newTemplate, department: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
+                placeholder="如：技术部"
+              />
+            </div>
           </div>
           <div>
             <label className="text-sm text-slate-400">岗位职责</label>
@@ -339,23 +369,37 @@ export default function TemplatesPage() {
                 </select>
               </div>
               <div>
-                <label className="text-sm text-slate-400">行业</label>
-                <input
-                  type="text"
+                <label className="text-sm text-slate-400">行业类型</label>
+                <select
                   value={editingTemplate.industry || ''}
                   onChange={e => setEditingTemplate({ ...editingTemplate, industry: e.target.value })}
                   className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
-                />
+                >
+                  <option value="">请选择行业</option>
+                  {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
+                </select>
               </div>
             </div>
-            <div>
-              <label className="text-sm text-slate-400">岗位名称</label>
-              <input
-                type="text"
-                value={editingTemplate.title}
-                onChange={e => setEditingTemplate({ ...editingTemplate, title: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm text-slate-400">岗位名称</label>
+                <input
+                  type="text"
+                  value={editingTemplate.title}
+                  onChange={e => setEditingTemplate({ ...editingTemplate, title: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-slate-400">所属部门</label>
+                <input
+                  type="text"
+                  value={editingTemplate.department || ''}
+                  onChange={e => setEditingTemplate({ ...editingTemplate, department: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 py-2 text-white"
+                  placeholder="如：技术部"
+                />
+              </div>
             </div>
             <div>
               <label className="text-sm text-slate-400">岗位职责</label>

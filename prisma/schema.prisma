@@ -254,6 +254,7 @@ model PositionTemplate {
   id              String   @id @default(cuid())
   category        String   // tech, product, design, operations, sales, management
   title           String
+  department      String?  // 所属部门
   description     String?  // 岗位职责模板
   requirements    String?  // 任职要求模板 (JSON)
   skillsWeight    String   @default("{}") // 技能权重 (JSON)
