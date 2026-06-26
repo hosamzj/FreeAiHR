@@ -118,12 +118,12 @@ export default function TemplatesPage() {
     department: string;
     responsibilities: string[];
     requirements: string[];
-    preferred: string[];
+    niceToHave: string[];
     benefits: string[];
     industry: string;
     experience: string;
-    salaryRange: string;
-    skills: string;
+    salary: string;
+    skills: string[];
   }) => {
     try {
       const res = await fetch('/api/position-templates', {

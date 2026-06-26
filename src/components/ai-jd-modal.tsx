@@ -8,7 +8,7 @@ import { Modal } from '@/components/ui/modal';
 interface AIJDModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onGenerate?: (result: JDResult & { industry: string; experience: string; salaryRange: string; skills: string }) => void;
+  onGenerate?: (result: JDResult & { industry: string; experience: string; salary: string; skills: string[] }) => void;
 }
 
 interface JDResult {
@@ -16,7 +16,7 @@ interface JDResult {
   department: string;
   responsibilities: string[];
   requirements: string[];
-  preferred: string[];
+  niceToHave: string[];
   benefits: string[];
 }
 
@@ -78,7 +78,7 @@ export function AIJDModal({ isOpen, onClose, onGenerate }: AIJDModalProps) {
       ...(result.requirements || []).map((r, i) => `${i + 1}. ${r}`),
       '',
       '### 加分项',
-      ...(result.preferred || []).map((r, i) => `${i + 1}. ${r}`),
+      ...(result.niceToHave || []).map((r, i) => `${i + 1}. ${r}`),
       '',
       '### 福利待遇',
       ...(result.benefits || []).map((r, i) => `${i + 1}. ${r}`),
@@ -232,7 +232,7 @@ export function AIJDModal({ isOpen, onClose, onGenerate }: AIJDModalProps) {
           <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
             <Section title="岗位职责" items={result.responsibilities} />
             <Section title="任职要求" items={result.requirements} />
-            <Section title="加分项" items={result.preferred} />
+            <Section title="加分项" items={result.niceToHave} />
             <Section title="福利待遇" items={result.benefits} />
           </div>
 
@@ -256,7 +256,8 @@ export function AIJDModal({ isOpen, onClose, onGenerate }: AIJDModalProps) {
   );
 }
 
-function Section({ title, items }: { title: string; items: string[] }) {
+function Section({ title, items }: { title: string; items?: string[] }) {
+  if (!items || items.length === 0) return null;
   return (
     <div>
       <h4 className="text-xs font-medium text-sky-400 mb-1.5">{title}</h4>
