@@ -993,7 +993,7 @@ export default function ResumesPage() {
                     className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-sky-500/20 px-2.5 md:px-3 text-[11px] md:text-xs text-sky-400 hover:bg-sky-500/10 cursor-pointer transition-colors"
                   >
                     <FileText className="h-3 w-3" />
-                    {candidate.resumeUrl ? '查看简历' : '上传简历'}
+                    {candidate.resumeUrl ? '详细信息' : '上传简历'}
                   </button>
                   {/* AI画像按钮 */}
                   <button
