@@ -9,7 +9,7 @@ echo "Installing dependencies..."
 pnpm install --prefer-frozen-lockfile --prefer-offline --loglevel warn --reporter=append-only
 
 echo "Generating Prisma Client for PostgreSQL..."
-npx prisma generate
+pnpm prisma generate
 
 echo "Cleaning previous build artifacts..."
 rm -rf .next dist

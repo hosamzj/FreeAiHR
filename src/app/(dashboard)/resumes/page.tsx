@@ -31,7 +31,29 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { mockCandidates, mockParsedResume } from '@/lib/mock-data';
+import { mockCandidates } from '@/lib/mock-data';
+
+// 简历解析结果类型
+interface ParsedResumeData {
+  name: string;
+  phone: string;
+  email: string;
+  gender?: string;
+  age?: number;
+  location?: string;
+  education: { school: string; degree: string; major: string; startDate?: string; endDate?: string }[];
+  workExperience: { company: string; position: string; startDate?: string; endDate?: string; description: string }[];
+  skills: string[];
+  certificates?: string[];
+  languages?: string[];
+  summary?: string;
+  expectedSalary?: string;
+  expectedPosition?: string;
+  fileName?: string;
+  confidence?: number;
+  parseMethod?: string;
+  rawTextLength?: number;
+}
 import { Modal } from '@/components/ui/modal';
 import { ResumePreviewModal } from '@/components/resume-preview-modal';
 import { AIJDModal } from '@/components/ai-jd-modal';
@@ -45,7 +67,7 @@ export default function ResumesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
-  const [parsedResult, setParsedResult] = useState<typeof mockParsedResume | null>(null);
+  const [parsedResult, setParsedResult] = useState<ParsedResumeData | null>(null);
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -87,72 +109,72 @@ export default function ResumesPage() {
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch candidates from database on mount
-  useEffect(() => {
-    const fetchCandidates = async () => {
-      try {
-        const res = await fetch('/api/candidates');
-        const data = await res.json();
-        if (data.code === 0 && data.data?.candidates && data.data.candidates.length > 0) {
-          // Transform database candidates to match UI format
-          const transformed = data.data.candidates.map((c: Record<string, unknown>) => {
-            // Parse JSON fields safely
-            const parseJsonArray = (val: unknown): string[] => {
-              if (Array.isArray(val)) return val;
-              if (typeof val === 'string' && val) {
-                try { return JSON.parse(val); } catch { return []; }
-              }
-              return [];
-            };
-            const parseWorkHistory = (val: unknown): { company: string; position: string; duration: string }[] => {
-              if (Array.isArray(val)) return val;
-              if (typeof val === 'string' && val) {
-                try { return JSON.parse(val); } catch { return []; }
-              }
-              return [];
-            };
+  // Fetch candidates from database
+  const fetchCandidates = useCallback(async () => {
+    try {
+      const res = await fetch('/api/candidates');
+      const data = await res.json();
+      if (data.code === 0 && data.data?.candidates && data.data.candidates.length > 0) {
+        const transformed = data.data.candidates.map((c: Record<string, unknown>) => {
+          const parseJsonArray = (val: unknown): string[] => {
+            if (Array.isArray(val)) return val;
+            if (typeof val === 'string' && val) {
+              try { return JSON.parse(val); } catch { return []; }
+            }
+            return [];
+          };
+          const parseWorkHistory = (val: unknown): { company: string; position: string; duration: string }[] => {
+            if (Array.isArray(val)) return val;
+            if (typeof val === 'string' && val) {
+              try { return JSON.parse(val); } catch { return []; }
+            }
+            return [];
+          };
 
-            const skills = parseJsonArray(c.skills);
-            const tags = parseJsonArray(c.tags);
-            const workHistory = parseWorkHistory(c.workHistory);
-            const experience = typeof c.experience === 'number' ? c.experience : 0;
+          const skills = parseJsonArray(c.skills);
+          const tags = parseJsonArray(c.tags);
+          const workHistory = parseWorkHistory(c.workHistory);
+          const experience = typeof c.experience === 'number' ? c.experience : 0;
 
-            return {
-              id: c.id as string,
-              name: (c.name as string) || '未知候选人',
-              avatar: ((c.name as string) || '未').charAt(0),
-              email: (c.email as string) || '',
-              phone: (c.phone as string) || '',
-              gender: (c.gender as string) || 'male',
-              age: 25 + experience,
-              education: (c.education as string) || '未知',
-              school: (c.school as string) || '',
-              major: (c.major as string) || '',
-              experience,
-              currentCompany: (c.currentCompany as string) || '',
-              currentPosition: (c.currentPosition as string) || '',
-              skills,
-              location: (c.location as string) || '',
-              expectedSalary: (c.expectedSalary as string) || '',
-              status: (c.status as CandidateStatus) || 'new',
-              matchScore: typeof c.matchScore === 'number' ? c.matchScore : 75,
-              source: (c.source as string) || 'channel',
-              appliedPosition: (c.appliedPosition as string) || '',
-              department: (c.department as string) || '',
-              aiSummary: (c.aiSummary as string) || '',
-              tags,
-              workHistory,
-              appliedAt: (c.createdAt as string)?.split('T')[0] || new Date().toISOString().split('T')[0],
-            };
-          });
-          setCandidates(transformed);
-        }
-      } catch (error) {
-        console.error('Failed to fetch candidates:', error);
+          return {
+            id: c.id as string,
+            name: (c.name as string) || '未知候选人',
+            avatar: ((c.name as string) || '未').charAt(0),
+            email: (c.email as string) || '',
+            phone: (c.phone as string) || '',
+            gender: (c.gender as string) || 'male',
+            age: 25 + experience,
+            education: (c.education as string) || '未知',
+            school: (c.school as string) || '',
+            major: (c.major as string) || '',
+            experience,
+            currentCompany: (c.currentCompany as string) || '',
+            currentPosition: (c.currentPosition as string) || '',
+            skills,
+            location: (c.location as string) || '',
+            expectedSalary: (c.expectedSalary as string) || '',
+            status: (c.status as CandidateStatus) || 'new',
+            matchScore: typeof c.matchScore === 'number' ? c.matchScore : 75,
+            source: (c.source as string) || 'channel',
+            appliedPosition: (c.appliedPosition as string) || '',
+            department: (c.department as string) || '',
+            aiSummary: (c.aiSummary as string) || '',
+            tags,
+            workHistory,
+            appliedAt: (c.createdAt as string)?.split('T')[0] || new Date().toISOString().split('T')[0],
+          };
+        });
+        setCandidates(transformed);
       }
-    };
-    fetchCandidates();
+    } catch (error) {
+      console.error('Failed to fetch candidates:', error);
+    }
   }, []);
+
+  // Fetch on mount
+  useEffect(() => {
+    fetchCandidates();
+  }, [fetchCandidates]);
 
   // Compute dynamic tab counts from candidates state
   const tabCounts = {
@@ -174,14 +196,14 @@ export default function ResumesPage() {
     { id: 'hired', label: '已入职', count: tabCounts.hired },
   ];
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     setIsUploading(false);
-    setIsParsing(true);
-    setTimeout(() => {
-      setIsParsing(false);
-      setParsedResult(mockParsedResume);
-    }, 2500);
+    
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    
+    await parseResumeFile(file);
   }, []);
 
   const handleFileSelect = useCallback(() => {
@@ -192,10 +214,9 @@ export default function ResumesPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check for duplicates first by trying to parse the filename
+    // Check for duplicates first
     setCheckingDuplicate(true);
     try {
-      // Extract potential info from filename for duplicate check
       const fileName = file.name.replace(/\.(pdf|doc|docx|png|jpg|jpeg)$/i, '');
       const res = await fetch('/api/candidates/check-duplicate', {
         method: 'POST',
@@ -217,28 +238,92 @@ export default function ResumesPage() {
     }
     setCheckingDuplicate(false);
 
-    // No duplicate found, proceed with parsing
-    setIsParsing(true);
-    setTimeout(() => {
-      setIsParsing(false);
-      setParsedResult(mockParsedResume);
-    }, 2500);
+    await parseResumeFile(file);
   }, []);
 
+  // 实际调用 API 解析简历
+  const parseResumeFile = async (file: File) => {
+    setIsParsing(true);
+    setParsedResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/candidates/parse-resume', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (data.code === 0 && data.data) {
+        setParsedResult(data.data as ParsedResumeData);
+      } else {
+        alert(data.message || '简历解析失败，请重试');
+      }
+    } catch (err) {
+      console.error('Parse resume error:', err);
+      alert('简历解析失败，请检查网络连接后重试');
+    } finally {
+      setIsParsing(false);
+    }
+  };
+
   // Handle duplicate resolution
-  const handleDuplicateAction = useCallback((action: 'skip' | 'overwrite' | 'keep') => {
+  const handleDuplicateAction = useCallback(async (action: 'skip' | 'overwrite' | 'keep') => {
     if (action === 'skip') {
       setDuplicateInfo(null);
       return;
     }
     // For overwrite or keep, proceed with parsing
+    const file = duplicateInfo?.pendingFile;
     setDuplicateInfo(null);
-    setIsParsing(true);
-    setTimeout(() => {
-      setIsParsing(false);
-      setParsedResult(mockParsedResume);
-    }, 2500);
-  }, []);
+    if (file) {
+      await parseResumeFile(file);
+    }
+  }, [duplicateInfo]);
+
+  // 确认导入候选人到候选人池
+  const handleConfirmImport = useCallback(async () => {
+    if (!parsedResult) return;
+    
+    try {
+      const res = await fetch('/api/candidates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: parsedResult.name,
+          phone: parsedResult.phone,
+          email: parsedResult.email,
+          gender: parsedResult.gender,
+          age: parsedResult.age,
+          location: parsedResult.location,
+          education: parsedResult.education,
+          workExperience: parsedResult.workExperience,
+          skills: parsedResult.skills,
+          certificates: parsedResult.certificates,
+          languages: parsedResult.languages,
+          summary: parsedResult.summary,
+          expectedSalary: parsedResult.expectedSalary,
+          expectedPosition: parsedResult.expectedPosition,
+          source: 'ai_parse',
+          status: 'new',
+        }),
+      });
+      const data = await res.json();
+      if (data.code === 0) {
+        setParsedResult(null);
+        // Refresh candidate list
+        fetchCandidates();
+      } else {
+        alert(data.message || '导入失败，请重试');
+      }
+    } catch (err) {
+      console.error('Import candidate error:', err);
+      alert('导入失败，请检查网络连接');
+    }
+  }, [parsedResult]);
 
   const handlePassScreen = useCallback(async (candidateId: string, candidateName: string) => {
     setActionLoading(candidateId);
@@ -623,39 +708,39 @@ export default function ResumesPage() {
             <div className="md:col-span-1">
               <div className="flex items-center gap-3 mb-3">
                 <div className="flex h-10 w-10 md:h-12 md:w-12 items-center justify-center rounded-full bg-gradient-to-br from-sky-500/20 to-blue-600/20 text-xs md:text-sm font-bold text-sky-400 border border-sky-500/20">
-                  {parsedResult.avatar}
+                  {parsedResult.name?.charAt(0) || '?'}
                 </div>
                 <div>
                   <p className="text-sm md:text-base font-semibold text-white">{parsedResult.name}</p>
-                  <p className="text-[11px] md:text-xs text-slate-500">{parsedResult.position}</p>
+                  <p className="text-[11px] md:text-xs text-slate-500">{parsedResult.expectedPosition || '未知职位'}</p>
                 </div>
               </div>
               <div className="space-y-2 text-[11px] md:text-xs">
                 <div className="flex items-center gap-2 text-slate-400">
                   <GraduationCap className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                  <span className="truncate">{parsedResult.education} · {parsedResult.school}</span>
+                  <span className="truncate">{parsedResult.education?.[0]?.degree || '未知'} · {parsedResult.education?.[0]?.school || '未知院校'}</span>
                 </div>
                 <div className="flex items-center gap-2 text-slate-400">
                   <Clock className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                  {parsedResult.experience}年工作经验
+                  {parsedResult.workExperience?.length || 0}段工作经历
                 </div>
                 <div className="flex items-center gap-2 text-slate-400">
                   <Building2 className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                  <span className="truncate">{(parsedResult.workHistory || []).map(w => w.company).join(' → ') || '暂无工作经历'}</span>
+                  <span className="truncate">{(parsedResult.workExperience || []).map(w => w.company).join(' → ') || '暂无工作经历'}</span>
                 </div>
               </div>
               <div className="mt-3 flex items-center gap-2">
                 <div className={cn(
                   'flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-lg font-mono text-base md:text-lg font-bold',
-                  parsedResult.matchScore >= 90 ? 'bg-emerald-500/10 text-emerald-400' :
-                  parsedResult.matchScore >= 80 ? 'bg-sky-500/10 text-sky-400' :
+                  (parsedResult.confidence || 0) >= 90 ? 'bg-emerald-500/10 text-emerald-400' :
+                  (parsedResult.confidence || 0) >= 80 ? 'bg-sky-500/10 text-sky-400' :
                   'bg-amber-500/10 text-amber-400'
                 )}>
-                  {parsedResult.matchScore}
+                  {parsedResult.confidence || 0}
                 </div>
                 <div>
-                  <p className="text-[11px] md:text-xs text-slate-400">AI 匹配评分</p>
-                  <p className="text-[10px] text-slate-600">基于岗位JD评估</p>
+                  <p className="text-[11px] md:text-xs text-slate-400">AI 置信度</p>
+                  <p className="text-[10px] text-slate-600">{parsedResult.parseMethod === 'llm' ? 'LLM 解析' : '解析'}</p>
                 </div>
               </div>
             </div>
@@ -663,41 +748,47 @@ export default function ResumesPage() {
               <div>
                 <p className="text-[11px] md:text-xs font-medium text-slate-400 mb-1.5">AI 摘要</p>
                 <p className="text-[11px] md:text-xs leading-relaxed text-slate-300 bg-[#0a0e1a] rounded-lg p-2.5 md:p-3 border border-[#1e293b]">
-                  {parsedResult.aiSummary}
+                  {parsedResult.summary || `${parsedResult.name}，${parsedResult.education?.[0]?.degree || ''}学历，${parsedResult.workExperience?.length || 0}段工作经历，擅长${(parsedResult.skills || []).slice(0, 5).join('、')}。`}
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
                 <div className="flex-1">
                   <p className="text-[11px] md:text-xs font-medium text-emerald-400 mb-1.5 flex items-center gap-1">
-                    <Check className="h-3 w-3" /> 匹配技能
+                    <Check className="h-3 w-3" /> 核心技能
                   </p>
                   <div className="flex flex-wrap gap-1">
-                    {parsedResult.matchedSkills.map((s) => (
+                    {(parsedResult.skills || []).slice(0, 8).map((s) => (
                       <span key={s} className="rounded-md bg-emerald-500/10 px-1.5 md:px-2 py-0.5 text-[10px] md:text-[11px] text-emerald-400 border border-emerald-500/20">
                         {s}
                       </span>
                     ))}
+                    {(parsedResult.skills || []).length === 0 && (
+                      <span className="text-[10px] text-slate-600">暂无</span>
+                    )}
                   </div>
                 </div>
                 <div className="flex-1">
                   <p className="text-[11px] md:text-xs font-medium text-amber-400 mb-1.5 flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3" /> 待确认
+                    <AlertCircle className="h-3 w-3" /> 证书/语言
                   </p>
                   <div className="flex flex-wrap gap-1">
-                    {parsedResult.unmatchedSkills.map((s) => (
+                    {(parsedResult.certificates || []).concat(parsedResult.languages || []).slice(0, 6).map((s) => (
                       <span key={s} className="rounded-md bg-amber-500/10 px-1.5 md:px-2 py-0.5 text-[10px] md:text-[11px] text-amber-400 border border-amber-500/20">
                         {s}
                       </span>
                     ))}
+                    {!parsedResult.certificates?.length && !parsedResult.languages?.length && (
+                      <span className="text-[10px] text-slate-600">暂无</span>
+                    )}
                   </div>
                 </div>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => alert('已加入候选人池')} className="flex h-8 items-center gap-1.5 rounded-lg bg-sky-500 px-3 text-xs font-medium text-white hover:bg-sky-600 transition-colors">
+                <button onClick={handleConfirmImport} className="flex h-8 items-center gap-1.5 rounded-lg bg-sky-500 px-3 text-xs font-medium text-white hover:bg-sky-600 transition-colors">
                   <Check className="h-3.5 w-3.5" /> 加入候选人池
                 </button>
-                <button onClick={() => alert('查看详情功能开发中')} className="flex h-8 items-center gap-1.5 rounded-lg border border-[#1e293b] px-3 text-xs text-slate-400 hover:text-white transition-colors">
-                  <Eye className="h-3.5 w-3.5" /> 查看详情
+                <button onClick={() => setParsedResult(null)} className="flex h-8 items-center gap-1.5 rounded-lg border border-[#1e293b] px-3 text-xs text-slate-400 hover:text-white transition-colors">
+                  <Eye className="h-3.5 w-3.5" /> 取消
                 </button>
               </div>
             </div>

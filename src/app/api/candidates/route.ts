@@ -54,7 +54,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { name, email, phone, education, school, skills, appliedPosition, department, experience } = body;
+    const {
+      name, email, phone, gender, age, location,
+      education, workExperience, skills, certificates, languages,
+      summary, expectedSalary, expectedPosition, source, status,
+    } = body;
 
     if (!name) return badRequest('姓名不能为空');
 
@@ -66,19 +70,44 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Extract education info
+    const topEducation = Array.isArray(education) && education.length > 0 ? education[0] : null;
+    const educationStr = topEducation ? `${topEducation.degree || ''} ${topEducation.major || ''}`.trim() : null;
+    const schoolStr = topEducation?.school || null;
+    
+    // Extract work experience
+    const workExp = Array.isArray(workExperience) ? workExperience : [];
+    const yearsExp = workExp.reduce((total: number, w: { startDate?: string; endDate?: string }) => {
+      if (w.startDate && w.endDate) {
+        const start = new Date(w.startDate).getFullYear();
+        const end = new Date(w.endDate).getFullYear();
+        return total + (end - start);
+      }
+      return total;
+    }, 0);
+    const currentCompany = workExp.length > 0 ? workExp[workExp.length - 1].company : null;
+    const currentPosition = workExp.length > 0 ? workExp[workExp.length - 1].position : null;
+
     const candidate = await prisma.candidate.create({
       data: {
         name,
         email: email || null,
         phone: phone || null,
-        education: education || null,
-        school: school || null,
-        experience: experience || 0,
+        education: educationStr,
+        school: schoolStr,
+        experience: yearsExp || 0,
+        currentCompany,
+        currentPosition,
         skills: JSON.stringify(skills || []),
-        appliedPosition: appliedPosition || null,
-        department: department || null,
-        status: 'new',
-        matchScore: Math.floor(Math.random() * 40) + 60, // Simulated AI score
+        appliedPosition: expectedPosition || null,
+        source: source || 'ai_parse',
+        status: status || 'new',
+        aiSummary: summary || null,
+        resumeParsed: JSON.stringify({
+          name, email, phone, gender, age, location,
+          education, workExperience, skills, certificates, languages,
+          summary, expectedSalary, expectedPosition,
+        }),
       },
     });
 
