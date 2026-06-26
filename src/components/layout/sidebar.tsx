@@ -18,6 +18,7 @@ import {
   FileSignature,
   UserPlus,
   ClipboardList,
+  Briefcase,
   Target,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -41,6 +42,7 @@ const allNavItems: NavItem[] = [
   { id: 'offers', label: 'Offer管理', icon: FileCheck, href: '/offers', roles: ['admin', 'hr_manager'], group: '招聘管理' },
   // 招聘增强
   { id: 'templates', label: '岗位模板库', icon: ClipboardList, href: '/templates', roles: ['admin', 'hr_manager'], group: '招聘增强' },
+  { id: 'positions', label: '职位发布', icon: Briefcase, href: '/positions', roles: ['admin', 'hr_manager'], group: '招聘增强' },
   { id: 'candidate-pool', label: '候选人池', icon: Target, href: '/candidate-pool', roles: ['admin', 'hr_manager'], group: '招聘增强' },
   { id: 'reports', label: '招聘报表', icon: FileText, href: '/reports', roles: ['admin', 'hr_manager'], group: '招聘增强' },
   // 员工生命周期

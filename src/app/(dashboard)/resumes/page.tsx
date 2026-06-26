@@ -72,6 +72,8 @@ export default function ResumesPage() {
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [importPositionId, setImportPositionId] = useState('');
+  const [positions, setPositions] = useState<{ id: string; title: string; department?: string }[]>([]);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [showRejectOfferModal, setShowRejectOfferModal] = useState(false);
@@ -174,6 +176,11 @@ export default function ResumesPage() {
   // Fetch on mount
   useEffect(() => {
     fetchCandidates();
+    // Fetch open positions for import dropdown
+    fetch('/api/positions?status=open')
+      .then(r => r.json())
+      .then(d => { if (d.code === 0) setPositions(d.data?.positions || d.data || []); })
+      .catch(() => {});
   }, [fetchCandidates]);
 
   // Compute dynamic tab counts from candidates state
@@ -309,11 +316,21 @@ export default function ResumesPage() {
           expectedPosition: parsedResult.expectedPosition,
           source: 'ai_parse',
           status: 'new',
+          positionId: importPositionId || undefined,
         }),
       });
       const data = await res.json();
       if (data.code === 0) {
+        // If position is selected, trigger match scoring
+        if (importPositionId && data.data?.id) {
+          fetch('/api/positions/match', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ candidateId: data.data.id, positionId: importPositionId }),
+          }).catch(() => {});
+        }
         setParsedResult(null);
+        setImportPositionId('');
         // Refresh candidate list
         fetchCandidates();
       } else {
@@ -323,7 +340,7 @@ export default function ResumesPage() {
       console.error('Import candidate error:', err);
       alert('导入失败，请检查网络连接');
     }
-  }, [parsedResult]);
+  }, [parsedResult, importPositionId, fetchCandidates]);
 
   const handlePassScreen = useCallback(async (candidateId: string, candidateName: string) => {
     setActionLoading(candidateId);
@@ -1212,12 +1229,15 @@ export default function ResumesPage() {
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1.5">导入到岗位</label>
-            <select className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none">
-              <option value="">选择目标岗位</option>
-              <option value="frontend">前端开发工程师</option>
-              <option value="backend">后端开发工程师</option>
-              <option value="fullstack">全栈开发工程师</option>
-              <option value="product">产品经理</option>
+            <select
+              value={importPositionId}
+              onChange={(e) => setImportPositionId(e.target.value)}
+              className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none"
+            >
+              <option value="">选择目标岗位（可选）</option>
+              {positions.map((p) => (
+                <option key={p.id} value={p.id}>{p.title}{p.department ? ` - ${p.department}` : ''}</option>
+              ))}
             </select>
           </div>
           <div className="flex items-center gap-2 rounded-lg bg-sky-500/5 border border-sky-500/20 p-3">

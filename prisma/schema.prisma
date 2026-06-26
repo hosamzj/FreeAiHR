@@ -534,6 +534,47 @@ model OnboardingNotificationRule {
   updatedAt       DateTime @updatedAt
 }
 
+// 职位发布
+model Position {
+  id              String   @id @default(cuid())
+  title           String
+  department      String?
+  category        String?
+  industry        String?
+  location        String?
+  headcount       Int      @default(1)
+  salaryMin       Int?
+  salaryMax       Int?
+  description     String   // JD内容
+  requirements    String   @default("[]") // JSON array
+  niceToHave      String   @default("[]") // JSON array
+  status          String   @default("open") // draft, open, closed
+  templateId      String?  // 来源模板ID
+  createdBy       String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  creator         User     @relation(fields: [createdBy], references: [id])
+  candidates      CandidatePosition[]
+}
+
+// 候选人-职位关联（多对多，含匹配度）
+model CandidatePosition {
+  id          String   @id @default(cuid())
+  candidateId String
+  positionId  String
+  matchScore  Int?     // AI匹配度 0-100
+  matchDetail String?  // JSON: 匹配详情
+  status      String   @default("pending") // pending, matched, contacted, interviewing
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  candidate   Candidate @relation(fields: [candidateId], references: [id])
+  position    Position  @relation(fields: [positionId], references: [id])
+
+  @@unique([candidateId, positionId])
+}
+
 // 邮件模板管理
 model EmailTemplate {
   id              String   @id @default(cuid())
