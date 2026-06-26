@@ -37,6 +37,7 @@ export default function TemplatesPage() {
   const [aiPrompt, setAiPrompt] = useState({ positionName: '', department: '', experience: '', skills: '', category: '' });
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiResult, setAiResult] = useState<{ responsibilities: string[]; requirements: string[]; preferred: string[]; benefits: string[] } | null>(null);
+  const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
 
   const loadCategories = useCallback(async () => {
     try {
@@ -247,7 +248,105 @@ export default function TemplatesPage() {
     return (
       <div className="flex h-64 items-center justify-center">
         <RefreshCw className="h-6 w-6 animate-spin text-sky-400" />
-      </div>
+        {/* Preview Modal */}
+      <Modal isOpen={!!previewTemplate} onClose={() => setPreviewTemplate(null)} title="模板详情" size="lg">
+        {previewTemplate && (
+          <div className="space-y-5">
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-[#1e293b] pb-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="rounded bg-sky-500/10 px-2 py-0.5 text-xs text-sky-400">
+                    {getCategoryLabel(previewTemplate.category)}
+                  </span>
+                  <span className="text-xs text-slate-500">版本 v{previewTemplate.version}</span>
+                </div>
+                <h2 className="text-xl font-semibold text-white">{previewTemplate.title}</h2>
+                {previewTemplate.industry && (
+                  <p className="text-sm text-slate-400 mt-1">{previewTemplate.industry}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <span>使用 {previewTemplate.usageCount} 次</span>
+                <span className={`rounded px-2 py-0.5 ${previewTemplate.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-500/10 text-slate-400'}`}>
+                  {previewTemplate.status === 'active' ? '启用' : '停用'}
+                </span>
+              </div>
+            </div>
+
+            {/* Responsibilities */}
+            {previewTemplate.description && (
+              <div>
+                <h3 className="text-sm font-medium text-sky-400 mb-2 flex items-center gap-1.5">
+                  <ClipboardList className="h-4 w-4" />
+                  岗位职责
+                </h3>
+                <div className="rounded-lg bg-[#0a0e1a] border border-[#1e293b] p-4">
+                  <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{previewTemplate.description}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Requirements */}
+            {previewTemplate.requirements && (() => {
+              let reqs: string[] = [];
+              try {
+                const parsed = JSON.parse(previewTemplate.requirements);
+                reqs = Array.isArray(parsed) ? parsed : [];
+              } catch {
+                reqs = previewTemplate.requirements.split('\n').filter(Boolean);
+              }
+              if (reqs.length === 0) return null;
+              return (
+                <div>
+                  <h3 className="text-sm font-medium text-sky-400 mb-2 flex items-center gap-1.5">
+                    <Sparkles className="h-4 w-4" />
+                    任职要求
+                  </h3>
+                  <div className="rounded-lg bg-[#0a0e1a] border border-[#1e293b] p-4">
+                    <ul className="space-y-1.5">
+                      {reqs.map((item, i) => (
+                        <li key={i} className="text-sm text-slate-300 flex gap-2">
+                          <span className="text-sky-500 shrink-0 mt-0.5">•</span>
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Footer actions */}
+            <div className="flex gap-2 pt-2 border-t border-[#1e293b]">
+              <button
+                onClick={() => setPreviewTemplate(null)}
+                className="flex-1 px-4 py-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                关闭
+              </button>
+              <button
+                onClick={() => {
+                  setPreviewTemplate(null);
+                  setNewTemplate({
+                    category: previewTemplate.category,
+                    title: previewTemplate.title,
+                    description: previewTemplate.description || '',
+                    requirements: previewTemplate.requirements || '',
+                    industry: previewTemplate.industry || '',
+                  });
+                  setShowAddModal(true);
+                }}
+                className="flex-1 px-4 py-2 text-sm text-white bg-sky-500 hover:bg-sky-400 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+              >
+                <Edit2 className="h-4 w-4" />
+                编辑模板
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
     );
   }
 
@@ -361,7 +460,11 @@ export default function TemplatesPage() {
           </div>
         ) : (
           templates.map(t => (
-            <div key={t.id} className="rounded-xl border border-[#1e293b] bg-[#111827] p-4 hover:border-sky-500/30">
+            <div
+              key={t.id}
+              onClick={() => setPreviewTemplate(t)}
+              className="group cursor-pointer rounded-xl border border-[#1e293b] bg-[#111827] p-4 transition-all duration-200 hover:border-sky-500/30 hover:-translate-y-0.5"
+            >
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
                   <ClipboardList className="h-5 w-5 text-sky-400" />
