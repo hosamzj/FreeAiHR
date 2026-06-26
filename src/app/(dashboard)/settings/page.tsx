@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import {
   Settings, Shield, Key, Building2, Save, Loader2, Check, X,
-  Globe, Lock, Mail, Download, Bot, AlertTriangle, Video, Plus, GripVertical, Trash2, Edit2,
+  Globe, Lock, Mail, Download, Bot, AlertTriangle, Video, Plus, GripVertical, Trash2, Edit2, Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -108,6 +108,7 @@ export default function SettingsPage() {
   const [aiProviders, setAiProviders] = useState<{ id: string; name: string; defaultModel: string }[]>([]);
   const [testingAI, setTestingAI] = useState(false);
   const [aiTestResult, setAiTestResult] = useState<'success' | 'error' | null>(null);
+  const [aiTestDetail, setAiTestDetail] = useState<string>('');
 
   // Email templates state
   interface EmailTemplateItem {
@@ -164,6 +165,7 @@ export default function SettingsPage() {
   const handleTestAI = async () => {
     setTestingAI(true);
     setAiTestResult(null);
+    setAiTestDetail('');
     try {
       const res = await fetch('/api/ai/config', {
         method: 'POST',
@@ -172,8 +174,10 @@ export default function SettingsPage() {
       });
       const data = await res.json();
       setAiTestResult(data.code === 0 ? 'success' : 'error');
+      setAiTestDetail(data.message || data.data?.detail || '');
     } catch {
       setAiTestResult('error');
+      setAiTestDetail('网络请求失败，请检查服务是否正常运行');
     } finally {
       setTestingAI(false);
     }
@@ -906,28 +910,40 @@ export default function SettingsPage() {
                   </div>
 
                   {/* Test Connection */}
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={handleTestAI}
-                      disabled={testingAI || !aiConfig.apiKey}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
-                    >
-                      {testingAI ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Check className="w-4 h-4" />
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={handleTestAI}
+                        disabled={testingAI || !aiConfig.apiKey}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {testingAI ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Zap className="w-4 h-4" />
+                        )}
+                        测试连通性
+                      </button>
+                      {aiTestResult === 'success' && (
+                        <span className="text-sm text-emerald-400 flex items-center gap-1">
+                          <Check className="w-4 h-4" /> 连接成功
+                        </span>
                       )}
-                      测试连通性
-                    </button>
-                    {aiTestResult === 'success' && (
-                      <span className="text-sm text-emerald-400 flex items-center gap-1">
-                        <Check className="w-4 h-4" /> 连接成功
-                      </span>
-                    )}
-                    {aiTestResult === 'error' && (
-                      <span className="text-sm text-red-400 flex items-center gap-1">
-                        <X className="w-4 h-4" /> 连接失败
-                      </span>
+                      {aiTestResult === 'error' && (
+                        <span className="text-sm text-red-400 flex items-center gap-1">
+                          <X className="w-4 h-4" /> 连接失败
+                        </span>
+                      )}
+                    </div>
+                    {aiTestDetail && (
+                      <div className={cn(
+                        'p-3 rounded-lg text-xs font-mono',
+                        aiTestResult === 'success'
+                          ? 'bg-emerald-500/5 border border-emerald-500/20 text-emerald-300'
+                          : 'bg-red-500/5 border border-red-500/20 text-red-300'
+                      )}>
+                        {aiTestDetail}
+                      </div>
                     )}
                   </div>
                 </>
