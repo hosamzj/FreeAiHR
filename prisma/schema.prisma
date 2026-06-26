@@ -8,27 +8,27 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  phone         String?   @unique
-  password      String
-  name          String
-  avatar        String?
-  role          String    @default("interviewer") // admin, hr_manager, interviewer, candidate
-  department    String?
-  position      String?
-  status        String    @default("active") // active, disabled
+  id                String    @id @default(cuid())
+  email             String    @unique
+  phone             String?   @unique
+  password          String
+  name              String
+  avatar            String?
+  role              String    @default("interviewer") // admin, hr_manager, interviewer, candidate
+  department        String?
+  position          String?
+  status            String    @default("active") // active, disabled
   passwordChangedAt DateTime?
-  lastLoginAt   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  lastLoginAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   // Relations
-  interviews    Interview[]     @relation("Interviewer")
-  evaluations   InterviewEvaluation[]
-  offers        Offer[]         @relation("Creator")
-  auditLogs     AuditLog[]
-  smsCodes      SmsCode[]
+  interviews  Interview[]           @relation("Interviewer")
+  evaluations InterviewEvaluation[]
+  offers      Offer[]               @relation("Creator")
+  auditLogs   AuditLog[]
+  smsCodes    SmsCode[]
 }
 
 model SmsCode {
@@ -52,7 +52,7 @@ model Candidate {
   school          String?
   major           String?
   graduationYear  Int?
-  experience      Int?     // years
+  experience      Int? // years
   currentCompany  String?
   currentPosition String?
   skills          String   @default("[]") // JSON array
@@ -65,128 +65,128 @@ model Candidate {
   aiSummary       String?
   appliedPosition String?
   department      String?
-  userId          String?  // Link to candidate portal account
+  userId          String? // Link to candidate portal account
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   // Relations
-  interviews      Interview[]
-  applications    Application[]
-  feedbacks       CandidateFeedback[]
-  offers          Offer[]
+  interviews   Interview[]
+  applications Application[]
+  feedbacks    CandidateFeedback[]
+  offers       Offer[]
 }
 
 model JobPosition {
-  id            String   @id @default(cuid())
-  title         String
-  department    String
-  location      String?
-  type          String   @default("full_time") // full_time, part_time, intern
-  status        String   @default("open") // open, closed, paused
-  description   String?
-  requirements  String?  // JSON
-  salaryMin     Int?
-  salaryMax     Int?
-  headcount     Int      @default(1)
-  channels      String   @default("[]") // JSON array of channels
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(cuid())
+  title        String
+  department   String
+  location     String?
+  type         String   @default("full_time") // full_time, part_time, intern
+  status       String   @default("open") // open, closed, paused
+  description  String?
+  requirements String? // JSON
+  salaryMin    Int?
+  salaryMax    Int?
+  headcount    Int      @default(1)
+  channels     String   @default("[]") // JSON array of channels
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // Relations
-  candidates    Application[]
-  interviews    Interview[]
+  candidates Application[]
+  interviews Interview[]
 }
 
 model Application {
-  id            String   @id @default(cuid())
-  candidateId   String
-  positionId    String
-  status        String   @default("applied") // applied, screening, interview, offer, hired, rejected
-  source        String   @default("direct")
-  matchScore    Int?
-  aiAnalysis    String?  // JSON
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          String   @id @default(cuid())
+  candidateId String
+  positionId  String
+  status      String   @default("applied") // applied, screening, interview, offer, hired, rejected
+  source      String   @default("direct")
+  matchScore  Int?
+  aiAnalysis  String? // JSON
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  candidate     Candidate    @relation(fields: [candidateId], references: [id])
-  position      JobPosition  @relation(fields: [positionId], references: [id])
+  candidate Candidate   @relation(fields: [candidateId], references: [id])
+  position  JobPosition @relation(fields: [positionId], references: [id])
 
   @@unique([candidateId, positionId])
 }
 
 model Interview {
-  id              String   @id @default(cuid())
-  candidateId     String
-  positionId      String?
-  interviewerId   String
-  type            String   @default("first") // first, second, final, technical
-  status          String   @default("scheduled") // scheduled, completed, cancelled
-  scheduledAt     DateTime
-  duration        Int      @default(60) // minutes
-  location        String?  // physical room or video link
-  notes           String?
-  checkInCode     String?  // QR code check-in
-  checkInAt       DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String    @id @default(cuid())
+  candidateId   String
+  positionId    String?
+  interviewerId String
+  type          String    @default("first") // first, second, final, technical
+  status        String    @default("scheduled") // scheduled, completed, cancelled
+  scheduledAt   DateTime
+  duration      Int       @default(60) // minutes
+  location      String? // physical room or video link
+  notes         String?
+  checkInCode   String? // QR code check-in
+  checkInAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  candidate       Candidate   @relation(fields: [candidateId], references: [id])
-  position        JobPosition? @relation(fields: [positionId], references: [id])
-  interviewer     User        @relation("Interviewer", fields: [interviewerId], references: [id])
-  evaluations     InterviewEvaluation[]
+  candidate   Candidate             @relation(fields: [candidateId], references: [id])
+  position    JobPosition?          @relation(fields: [positionId], references: [id])
+  interviewer User                  @relation("Interviewer", fields: [interviewerId], references: [id])
+  evaluations InterviewEvaluation[]
 }
 
 model InterviewEvaluation {
-  id              String   @id @default(cuid())
-  interviewId     String
-  evaluatorId     String
-  technicalScore  Int?     // 1-5
-  communicationScore Int?  // 1-5
-  cultureScore    Int?     // 1-5
-  overallScore    Int?     // 1-5
-  strengths       String?
-  weaknesses      String?
-  recommendation  String?  // hire, no_hire, maybe
-  comments        String?
-  aiSuggestion    String?  // AI generated suggestion
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  interviewId        String
+  evaluatorId        String
+  technicalScore     Int? // 1-5
+  communicationScore Int? // 1-5
+  cultureScore       Int? // 1-5
+  overallScore       Int? // 1-5
+  strengths          String?
+  weaknesses         String?
+  recommendation     String? // hire, no_hire, maybe
+  comments           String?
+  aiSuggestion       String? // AI generated suggestion
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  interview       Interview @relation(fields: [interviewId], references: [id])
-  evaluator       User      @relation(fields: [evaluatorId], references: [id])
+  interview Interview @relation(fields: [interviewId], references: [id])
+  evaluator User      @relation(fields: [evaluatorId], references: [id])
 }
 
 model CandidateFeedback {
-  id            String   @id @default(cuid())
-  candidateId   String
-  interviewId   String?
-  rating        Int      // 1-5
-  comments      String?
-  createdAt     DateTime @default(now())
+  id          String   @id @default(cuid())
+  candidateId String
+  interviewId String?
+  rating      Int // 1-5
+  comments    String?
+  createdAt   DateTime @default(now())
 
-  candidate     Candidate @relation(fields: [candidateId], references: [id])
+  candidate Candidate @relation(fields: [candidateId], references: [id])
 }
 
 model Offer {
-  id              String   @id @default(cuid())
-  candidateId     String
-  positionId      String?
-  creatorId       String
-  status          String   @default("draft") // draft, pending_approval, approved, sent, accepted, rejected
-  salaryBase      Int?
-  salaryBonus     Int?
-  salaryStock     Int?
-  startDate       DateTime?
-  benefits        String?  // JSON
-  approvalNotes   String?
-  approvedBy      String?
-  approvedAt      DateTime?
-  aiSuggestion    String?  // AI generated suggestion
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String    @id @default(cuid())
+  candidateId   String
+  positionId    String?
+  creatorId     String
+  status        String    @default("draft") // draft, pending_approval, approved, sent, accepted, rejected
+  salaryBase    Int?
+  salaryBonus   Int?
+  salaryStock   Int?
+  startDate     DateTime?
+  benefits      String? // JSON
+  approvalNotes String?
+  approvedBy    String?
+  approvedAt    DateTime?
+  aiSuggestion  String? // AI generated suggestion
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  candidate       Candidate @relation(fields: [candidateId], references: [id])
-  creator         User      @relation("Creator", fields: [creatorId], references: [id])
+  candidate Candidate @relation(fields: [candidateId], references: [id])
+  creator   User      @relation("Creator", fields: [creatorId], references: [id])
 }
 
 model SSOConfig {
@@ -205,331 +205,339 @@ model SSOConfig {
 }
 
 model PasswordPolicy {
-  id              String   @id @default(cuid())
-  minLength       Int      @default(8)
-  requireUppercase Boolean @default(true)
-  requireLowercase Boolean @default(true)
-  requireNumbers   Boolean @default(true)
-  requireSpecial   Boolean @default(true)
-  expiryDays      Int      @default(90)
-  historyCount    Int      @default(5)
-  updatedAt       DateTime @updatedAt
+  id               String   @id @default(cuid())
+  minLength        Int      @default(8)
+  requireUppercase Boolean  @default(true)
+  requireLowercase Boolean  @default(true)
+  requireNumbers   Boolean  @default(true)
+  requireSpecial   Boolean  @default(true)
+  expiryDays       Int      @default(90)
+  historyCount     Int      @default(5)
+  updatedAt        DateTime @updatedAt
 }
 
 model SystemConfig {
-  id              String   @id @default(cuid())
-  key             String   @unique
-  value           String
-  updatedAt       DateTime @updatedAt
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
 }
 
 model AuditLog {
-  id          String   @id @default(cuid())
-  userId      String
-  action      String   // create, update, delete, login, logout, etc.
-  resource    String?  // user, candidate, interview, etc.
-  resourceId  String?
-  details     String?  // JSON
-  ipAddress   String?
-  userAgent   String?
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  userId     String
+  action     String // create, update, delete, login, logout, etc.
+  resource   String? // user, candidate, interview, etc.
+  resourceId String?
+  details    String? // JSON
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
 
-  user        User     @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 }
 
 model Notification {
-  id          String   @id @default(cuid())
-  userId      String
-  type        String   // reminder, approval, interview, system
-  title       String
-  content     String?
-  read        Boolean  @default(false)
-  link        String?
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  userId    String
+  type      String // reminder, approval, interview, system
+  title     String
+  content   String?
+  read      Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
 }
 
 // ============ 新增模型：员工生命周期管理 ============
 
+model PositionCategory {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model PositionTemplate {
-  id              String   @id @default(cuid())
-  category        String   // tech, product, design, operations, sales, management
-  title           String
-  description     String?  // 岗位职责模板
-  requirements    String?  // 任职要求模板 (JSON)
-  skillsWeight    String   @default("{}") // 技能权重 (JSON)
-  experienceWeight String  @default("{}") // 经验权重 (JSON)
-  cultureWeight   String   @default("{}") // 文化匹配权重 (JSON)
-  industry        String?  // 行业
-  version         Int      @default(1)
-  usageCount      Int      @default(0)
-  status          String   @default("active") // active, archived
-  createdBy       String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id               String   @id @default(cuid())
+  category         String // tech, product, design, operations, sales, management
+  title            String
+  description      String? // 岗位职责模板
+  requirements     String? // 任职要求模板 (JSON)
+  skillsWeight     String   @default("{}") // 技能权重 (JSON)
+  experienceWeight String   @default("{}") // 经验权重 (JSON)
+  cultureWeight    String   @default("{}") // 文化匹配权重 (JSON)
+  industry         String? // 行业
+  version          Int      @default(1)
+  usageCount       Int      @default(0)
+  status           String   @default("active") // active, archived
+  createdBy        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model InterviewFeedback {
-  id                String   @id @default(cuid())
-  interviewId       String
-  evaluatorId       String
-  round             Int      @default(1) // 面试轮次
+  id                  String    @id @default(cuid())
+  interviewId         String
+  evaluatorId         String
+  round               Int       @default(1) // 面试轮次
   // 评分维度 1-5
-  technicalScore    Int?     // 专业技能
-  communicationScore Int?    // 沟通表达
-  problemSolvingScore Int?   // 问题解决
-  teamworkScore     Int?     // 团队协作
-  cultureScore      Int?     // 文化匹配
-  overallScore      Int?     // 综合评分
+  technicalScore      Int? // 专业技能
+  communicationScore  Int? // 沟通表达
+  problemSolvingScore Int? // 问题解决
+  teamworkScore       Int? // 团队协作
+  cultureScore        Int? // 文化匹配
+  overallScore        Int? // 综合评分
   // 评价内容
-  strengths         String?  // 优势
-  weaknesses        String?  // 不足
-  concerns          String?  // 顾虑
-  recommendation    String?  // strongly_recommend, recommend, neutral, not_recommend
-  comments          String?  // 详细评语
-  aiSummary         String?  // AI辅助总结
-  submittedAt       DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  strengths           String? // 优势
+  weaknesses          String? // 不足
+  concerns            String? // 顾虑
+  recommendation      String? // strongly_recommend, recommend, neutral, not_recommend
+  comments            String? // 详细评语
+  aiSummary           String? // AI辅助总结
+  submittedAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   @@unique([interviewId, evaluatorId, round])
 }
 
 model CandidatePool {
-  id              String   @id @default(cuid())
-  candidateId     String   @unique
-  status          String   @default("active") // active, reserve, blacklist, hired
-  poolTags        String   @default("[]") // JSON array
-  notes           String?  // HR备注
+  id              String    @id @default(cuid())
+  candidateId     String    @unique
+  status          String    @default("active") // active, reserve, blacklist, hired
+  poolTags        String    @default("[]") // JSON array
+  notes           String? // HR备注
   lastContactAt   DateTime?
-  lastContactType String?  // phone, email, meeting
-  contactHistory  String   @default("[]") // JSON array of contacts
-  skillTags       String   @default("[]") // 技能标签
-  expectedSalary  String?  // 期望薪资
-  location        String?  // 所在地区
-  yearsExp        Int?     // 工作年限
-  education       String?  // 学历
-  recommendedFor  String   @default("[]") // JSON array of positionIds
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  lastContactType String? // phone, email, meeting
+  contactHistory  String    @default("[]") // JSON array of contacts
+  skillTags       String    @default("[]") // 技能标签
+  expectedSalary  String? // 期望薪资
+  location        String? // 所在地区
+  yearsExp        Int? // 工作年限
+  education       String? // 学历
+  recommendedFor  String    @default("[]") // JSON array of positionIds
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 model ScreeningQuestion {
-  id              String   @id @default(cuid())
-  candidateId     String
-  positionId      String?
-  question        String
-  questionType    String   // experience_verify, skill_depth, motivation, salary_expect, start_date
-  order           Int      @default(0)
-  answer          String?
-  answerScore     Int?     // 1-5
-  aiEvaluation    String?  // AI评分意见
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id           String   @id @default(cuid())
+  candidateId  String
+  positionId   String?
+  question     String
+  questionType String // experience_verify, skill_depth, motivation, salary_expect, start_date
+  order        Int      @default(0)
+  answer       String?
+  answerScore  Int? // 1-5
+  aiEvaluation String? // AI评分意见
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model InterviewPackage {
-  id              String   @id @default(cuid())
-  interviewId     String   @unique
-  candidateSummary String? // 候选人简历摘要
-  aiProfile       String? // AI画像关键点 (JSON)
+  id                 String   @id @default(cuid())
+  interviewId        String   @unique
+  candidateSummary   String? // 候选人简历摘要
+  aiProfile          String? // AI画像关键点 (JSON)
   suggestedQuestions String? // 建议面试题目 (JSON array)
-  riskPoints      String? // 关注风险点 (JSON array)
-  scoringRubric   String? // 评分表 (JSON)
-  interviewerNotes String? // 面试官实时笔记
-  feedback        String? // 结构化反馈 (JSON)
-  status          String   @default("pending") // pending, in_progress, completed
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  riskPoints         String? // 关注风险点 (JSON array)
+  scoringRubric      String? // 评分表 (JSON)
+  interviewerNotes   String? // 面试官实时笔记
+  feedback           String? // 结构化反馈 (JSON)
+  status             String   @default("pending") // pending, in_progress, completed
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model Contract {
-  id              String   @id @default(cuid())
-  contractNo      String?  @unique // 合同编号 HT-YYYYMMDD-XXXX
-  employeeId      String   // 关联User表
-  employeeName    String
-  department      String?
-  position        String?
-  contractType    String   @default("regular") // regular, fixed_term, intern
-  startDate       DateTime
-  endDate         DateTime
-  status          String   @default("pending_sign") // pending_sign, signing, completed, terminated
+  id                 String    @id @default(cuid())
+  contractNo         String?   @unique // 合同编号 HT-YYYYMMDD-XXXX
+  employeeId         String // 关联User表
+  employeeName       String
+  department         String?
+  position           String?
+  contractType       String    @default("regular") // regular, fixed_term, intern
+  startDate          DateTime
+  endDate            DateTime
+  status             String    @default("pending_sign") // pending_sign, signing, completed, terminated
   // 招聘关联
-  candidateId     String?  // 关联候选人（从招聘转入）
-  source          String   @default("recruitment") // recruitment, manual, renewal
+  candidateId        String? // 关联候选人（从招聘转入）
+  source             String    @default("recruitment") // recruitment, manual, renewal
   // 续签流程
-  renewInitiatedBy String? // 发起续签的经理ID
-  renewInitiatedAt DateTime?
-  renewApprovedBy  String? // HRBP审批人ID
-  renewApprovedAt  DateTime?
-  renewExecutedBy  String? // HRS执行人ID
-  renewExecutedAt  DateTime?
-  renewNotes      String?
+  renewInitiatedBy   String? // 发起续签的经理ID
+  renewInitiatedAt   DateTime?
+  renewApprovedBy    String? // HRBP审批人ID
+  renewApprovedAt    DateTime?
+  renewExecutedBy    String? // HRS执行人ID
+  renewExecutedAt    DateTime?
+  renewNotes         String?
   // 提醒
-  reminderSent90  Boolean  @default(false)
-  reminderSent60  Boolean  @default(false)
-  reminderSent30  Boolean  @default(false)
-  reminderSent7   Boolean  @default(false)
+  reminderSent90     Boolean   @default(false)
+  reminderSent60     Boolean   @default(false)
+  reminderSent30     Boolean   @default(false)
+  reminderSent7      Boolean   @default(false)
   // 历史
   previousContractId String?
   // 入职关联
-  onboardingId    String?  // 关联入职记录
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  onboardingId       String? // 关联入职记录
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 }
 
 model Onboarding {
-  id              String   @id @default(cuid())
-  candidateId     String   @unique
-  employeeName    String
-  position        String?
-  department      String?
-  employeeId      String?  // 工号
-  contractId      String?  // 关联合同
-  managerId       String?  // 用人经理
-  mentorId        String?  // 导师
-  startDate       DateTime
-  onboardingDate  DateTime? // 入职日期
-  status          String   @default("pending") // pending, notified, in_progress, completed, cancelled
+  id                String    @id @default(cuid())
+  candidateId       String    @unique
+  employeeName      String
+  position          String?
+  department        String?
+  employeeId        String? // 工号
+  contractId        String? // 关联合同
+  managerId         String? // 用人经理
+  mentorId          String? // 导师
+  startDate         DateTime
+  onboardingDate    DateTime? // 入职日期
+  status            String    @default("pending") // pending, notified, in_progress, completed, cancelled
   // 入职任务
-  tasks           String   @default("[]") // JSON array of tasks
+  tasks             String    @default("[]") // JSON array of tasks
   // 进度追踪
-  itReady         Boolean  @default(false)
-  adminReady      Boolean  @default(false)
-  trainingReady   Boolean  @default(false)
-  teamReady       Boolean  @default(false)
-  itAccountReady  Boolean  @default(false)
-  equipmentReady  Boolean  @default(false)
-  trainingScheduled Boolean @default(false)
-  introductionDone Boolean @default(false)
+  itReady           Boolean   @default(false)
+  adminReady        Boolean   @default(false)
+  trainingReady     Boolean   @default(false)
+  teamReady         Boolean   @default(false)
+  itAccountReady    Boolean   @default(false)
+  equipmentReady    Boolean   @default(false)
+  trainingScheduled Boolean   @default(false)
+  introductionDone  Boolean   @default(false)
   // 回访
-  day7FollowUp    Boolean  @default(false)
-  day7FollowUpAt  DateTime?
-  day30FollowUp   Boolean  @default(false)
-  day30FollowUpAt DateTime?
-  notes           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  day7FollowUp      Boolean   @default(false)
+  day7FollowUpAt    DateTime?
+  day30FollowUp     Boolean   @default(false)
+  day30FollowUpAt   DateTime?
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 }
 
 model OnboardingTask {
-  id              String   @id @default(cuid())
-  onboardingId    String
-  category        String   // it, admin, training, team
-  title           String
-  description     String?
-  assigneeId      String?  // 负责人ID
-  assigneeName    String?
-  status          String   @default("pending") // pending, in_progress, completed
-  completedAt     DateTime?
-  dueDate         DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id           String    @id @default(cuid())
+  onboardingId String
+  category     String // it, admin, training, team
+  title        String
+  description  String?
+  assigneeId   String? // 负责人ID
+  assigneeName String?
+  status       String    @default("pending") // pending, in_progress, completed
+  completedAt  DateTime?
+  dueDate      DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
 
 // 合同续签提醒记录
 model ContractReminder {
-  id              String   @id @default(cuid())
-  contractId      String
-  reminderType    String   // T-45, T-30, T-15, T-7, overdue
-  recipientType   String   // manager, hrbp, hrs, hr_manager
-  recipientId     String?
-  recipientName   String?
-  recipientEmail  String?
-  status          String   @default("pending") // pending, sent, acknowledged, ignored
-  scheduledAt     DateTime // 计划发送时间
-  sentAt          DateTime?
-  acknowledgedAt  DateTime?
-  content         String?  // 提醒内容（JSON）
-  aiGenerated     Boolean  @default(false) // 是否AI生成
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String    @id @default(cuid())
+  contractId     String
+  reminderType   String // T-45, T-30, T-15, T-7, overdue
+  recipientType  String // manager, hrbp, hrs, hr_manager
+  recipientId    String?
+  recipientName  String?
+  recipientEmail String?
+  status         String    @default("pending") // pending, sent, acknowledged, ignored
+  scheduledAt    DateTime // 计划发送时间
+  sentAt         DateTime?
+  acknowledgedAt DateTime?
+  content        String? // 提醒内容（JSON）
+  aiGenerated    Boolean   @default(false) // 是否AI生成
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }
 
 // 合同续签提醒日志/归档
 model ContractReminderLog {
-  id              String   @id @default(cuid())
-  contractId      String
-  reminderId      String?
-  action          String   // reminder_sent, manager_confirmed, employee_signed, hr_signed, completed, overdue
-  actorId         String?
-  actorName       String?
-  actorRole       String?  // manager, hrbp, hrs, employee, system
-  details         String?  // JSON格式的详细信息
-  previousStatus  String?
-  newStatus       String?
-  createdAt       DateTime @default(now())
+  id             String   @id @default(cuid())
+  contractId     String
+  reminderId     String?
+  action         String // reminder_sent, manager_confirmed, employee_signed, hr_signed, completed, overdue
+  actorId        String?
+  actorName      String?
+  actorRole      String? // manager, hrbp, hrs, employee, system
+  details        String? // JSON格式的详细信息
+  previousStatus String?
+  newStatus      String?
+  createdAt      DateTime @default(now())
 }
 
 // 合同续签提醒规则配置
 model ContractReminderRule {
   id              String   @id @default(cuid())
-  name            String   // T-45, T-30, T-15, T-7
-  daysBefore      Int      // 提前天数
-  recipientTypes  String   // JSON array: ["manager", "hrbp", "hrs"]
+  name            String // T-45, T-30, T-15, T-7
+  daysBefore      Int // 提前天数
+  recipientTypes  String // JSON array: ["manager", "hrbp", "hrs"]
   enabled         Boolean  @default(true)
-  templateSubject String?  // 邮件主题模板
-  templateBody    String?  // 邮件正文模板
+  templateSubject String? // 邮件主题模板
+  templateBody    String? // 邮件正文模板
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
 
 // 入职通知记录
 model OnboardingNotification {
-  id              String   @id @default(cuid())
-  onboardingId    String
-  notificationType String  // completion_notice, training_reminder, anomaly_alert, daily_summary
-  recipientType   String   // manager, mentor, trainer, it, admin, hrbp, hrs
-  recipientId     String?
-  recipientName   String?
-  recipientEmail  String?
-  status          String   @default("pending") // pending, sent, acknowledged
-  scheduledAt     DateTime?
-  sentAt          DateTime?
-  acknowledgedAt  DateTime?
-  content         String?  // 通知内容（JSON）
-  aiGenerated     Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id               String    @id @default(cuid())
+  onboardingId     String
+  notificationType String // completion_notice, training_reminder, anomaly_alert, daily_summary
+  recipientType    String // manager, mentor, trainer, it, admin, hrbp, hrs
+  recipientId      String?
+  recipientName    String?
+  recipientEmail   String?
+  status           String    @default("pending") // pending, sent, acknowledged
+  scheduledAt      DateTime?
+  sentAt           DateTime?
+  acknowledgedAt   DateTime?
+  content          String? // 通知内容（JSON）
+  aiGenerated      Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 }
 
 // 入职每日汇总
 model OnboardingDailySummary {
-  id              String   @id @default(cuid())
-  summaryDate     DateTime // 汇总日期
-  completedCount  Int      @default(0) // 当日完成入职数
-  pendingCount    Int      @default(0) // 待处理数
-  anomalyCount    Int      @default(0) // 异常数
-  completedList   String   @default("[]") // JSON: 完成入职的员工列表
-  anomalyList     String   @default("[]") // JSON: 异常记录列表
-  pendingList     String   @default("[]") // JSON: 待处理列表
-  notifiedAt      DateTime? // 通知发送时间
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String    @id @default(cuid())
+  summaryDate    DateTime // 汇总日期
+  completedCount Int       @default(0) // 当日完成入职数
+  pendingCount   Int       @default(0) // 待处理数
+  anomalyCount   Int       @default(0) // 异常数
+  completedList  String    @default("[]") // JSON: 完成入职的员工列表
+  anomalyList    String    @default("[]") // JSON: 异常记录列表
+  pendingList    String    @default("[]") // JSON: 待处理列表
+  notifiedAt     DateTime? // 通知发送时间
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }
 
 // 入职通知规则配置
 model OnboardingNotificationRule {
-  id              String   @id @default(cuid())
-  name            String   // completion_notice, training_reminder, anomaly_alert
-  triggerCondition String  // 触发条件描述
-  recipientTypes  String   // JSON array: ["manager", "trainer", "hrbp"]
-  enabled         Boolean  @default(true)
-  templateSubject String?
-  templateBody    String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id               String   @id @default(cuid())
+  name             String // completion_notice, training_reminder, anomaly_alert
+  triggerCondition String // 触发条件描述
+  recipientTypes   String // JSON array: ["manager", "trainer", "hrbp"]
+  enabled          Boolean  @default(true)
+  templateSubject  String?
+  templateBody     String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 // 邮件模板管理
 model EmailTemplate {
-  id              String   @id @default(cuid())
-  name            String   @unique // 模板标识：contract_renew, onboarding_notice, etc.
-  displayName     String   // 显示名称
-  category        String   // 分类：contract, onboarding, interview, offer
-  subject         String   // 邮件主题模板
-  body            String   // 邮件正文HTML模板
-  variables       String   @default("[]") // JSON array: 支持的变量列表
-  enabled         Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id          String   @id @default(cuid())
+  name        String   @unique // 模板标识：contract_renew, onboarding_notice, etc.
+  displayName String // 显示名称
+  category    String // 分类：contract, onboarding, interview, offer
+  subject     String // 邮件主题模板
+  body        String // 邮件正文HTML模板
+  variables   String   @default("[]") // JSON array: 支持的变量列表
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
