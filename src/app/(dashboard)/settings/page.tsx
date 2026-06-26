@@ -168,13 +168,18 @@ export default function SettingsPage() {
     setAiTestDetail('');
     try {
       const res = await fetch('/api/ai/config', {
-        method: 'POST',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...aiConfig, testConnection: true }),
+        body: JSON.stringify({ ...aiConfig }),
       });
       const data = await res.json();
-      setAiTestResult(data.code === 0 ? 'success' : 'error');
-      setAiTestDetail(data.message || data.data?.detail || '');
+      if (data.code === 0 && data.data) {
+        setAiTestResult(data.data.success ? 'success' : 'error');
+        setAiTestDetail(data.data.message || '');
+      } else {
+        setAiTestResult('error');
+        setAiTestDetail(data.message || '测试失败');
+      }
     } catch {
       setAiTestResult('error');
       setAiTestDetail('网络请求失败，请检查服务是否正常运行');
