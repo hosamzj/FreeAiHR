@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireRole, success, unauthorized, badRequest, hashPassword } from '@/lib/auth';
+import { requireRole, success, unauthorized, badRequest, forbidden } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
 
 // GET /api/users/[id]
@@ -79,6 +79,22 @@ export async function DELETE(
   const { id } = await params;
   const admin = await requireRole('admin');
   if (!admin) return unauthorized();
+
+  // Prevent self-deletion
+  if (id === admin.userId) {
+    return forbidden('不能删除自己的账户');
+  }
+
+  // Ensure at least one admin remains
+  const targetUser = await prisma.user.findUnique({ where: { id }, select: { role: true } });
+  if (!targetUser) return badRequest('用户不存在');
+  
+  if (targetUser.role === 'admin') {
+    const adminCount = await prisma.user.count({ where: { role: 'admin', status: 'active' } });
+    if (adminCount <= 1) {
+      return forbidden('系统中至少需要保留一个管理员账户');
+    }
+  }
 
   await prisma.user.delete({ where: { id } });
 

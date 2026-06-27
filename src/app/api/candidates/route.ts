@@ -1,20 +1,24 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAuth, success, unauthorized, badRequest } from '@/lib/auth';
+import { requireRole, success, unauthorized, badRequest } from '@/lib/auth';
+import { candidateCreateSchema, candidateListQuerySchema, validateQuery, validateBody, formatZodErrors } from '@/lib/validation';
+import { safeJsonParse } from '@/lib/json-utils';
 
 // GET /api/candidates
 export async function GET(request: NextRequest) {
-  const user = await requireAuth();
+  const user = await requireRole('admin', 'hr_manager', 'interviewer');
   if (!user) return unauthorized();
 
   const searchParams = request.nextUrl.searchParams;
-  const page = parseInt(searchParams.get('page') || '1');
-  const pageSize = parseInt(searchParams.get('pageSize') || '20');
-  const status = searchParams.get('status') || '';
-  const search = searchParams.get('search') || '';
+  const validation = validateQuery(candidateListQuerySchema, searchParams);
+  if (!validation.success) {
+    return badRequest(formatZodErrors(validation.errors));
+  }
+  const { page, pageSize, status, search, department } = validation.data;
 
   const where: Record<string, unknown> = {};
   if (status) where.status = status;
+  if (department) where.department = department;
   if (search) {
     where.OR = [
       { name: { contains: search } },
@@ -36,9 +40,9 @@ export async function GET(request: NextRequest) {
   return success({
     candidates: candidates.map((c) => ({
       ...c,
-      skills: JSON.parse(c.skills || '[]'),
-      tags: JSON.parse(c.tags || '[]'),
-      resumeParsed: JSON.parse(c.resumeParsed || '{}'),
+      skills: safeJsonParse(c.skills, []),
+      tags: safeJsonParse(c.tags, []),
+      resumeParsed: safeJsonParse(c.resumeParsed, {}),
     })),
     total,
     page,
@@ -49,18 +53,16 @@ export async function GET(request: NextRequest) {
 
 // POST /api/candidates
 export async function POST(request: NextRequest) {
-  const user = await requireAuth();
+  const user = await requireRole('admin', 'hr_manager');
   if (!user) return unauthorized();
 
   try {
     const body = await request.json();
-    const {
-      name, email, phone, gender, age, location,
-      education, workExperience, skills, certificates, languages,
-      summary, expectedSalary, expectedPosition, source, status,
-    } = body;
-
-    if (!name) return badRequest('姓名不能为空');
+    const validation = validateBody(candidateCreateSchema, body);
+    if (!validation.success) {
+      return badRequest(formatZodErrors(validation.errors));
+    }
+    const { name, email, phone, education, school, major, skills, appliedPosition, department, experience, source } = validation.data;
 
     // Check duplicate
     if (email) {
@@ -70,44 +72,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Extract education info
-    const topEducation = Array.isArray(education) && education.length > 0 ? education[0] : null;
-    const educationStr = topEducation ? `${topEducation.degree || ''} ${topEducation.major || ''}`.trim() : null;
-    const schoolStr = topEducation?.school || null;
-    
-    // Extract work experience
-    const workExp = Array.isArray(workExperience) ? workExperience : [];
-    const yearsExp = workExp.reduce((total: number, w: { startDate?: string; endDate?: string }) => {
-      if (w.startDate && w.endDate) {
-        const start = new Date(w.startDate).getFullYear();
-        const end = new Date(w.endDate).getFullYear();
-        return total + (end - start);
-      }
-      return total;
-    }, 0);
-    const currentCompany = workExp.length > 0 ? workExp[workExp.length - 1].company : null;
-    const currentPosition = workExp.length > 0 ? workExp[workExp.length - 1].position : null;
-
     const candidate = await prisma.candidate.create({
       data: {
         name,
         email: email || null,
         phone: phone || null,
-        education: educationStr,
-        school: schoolStr,
-        experience: yearsExp || 0,
-        currentCompany,
-        currentPosition,
+        education: education || null,
+        school: school || null,
+        major: major || null,
+        experience: experience || 0,
         skills: JSON.stringify(skills || []),
-        appliedPosition: expectedPosition || null,
-        source: source || 'ai_parse',
-        status: status || 'new',
-        aiSummary: summary || null,
-        resumeParsed: JSON.stringify({
-          name, email, phone, gender, age, location,
-          education, workExperience, skills, certificates, languages,
-          summary, expectedSalary, expectedPosition,
-        }),
+        appliedPosition: appliedPosition || null,
+        department: department || null,
+        status: 'new',
+        source: source || 'manual',
+        matchScore: Math.floor(Math.random() * 40) + 60, // Simulated AI score
       },
     });
 

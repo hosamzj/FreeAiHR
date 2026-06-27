@@ -29,7 +29,9 @@ model User {
   offers        Offer[]         @relation("Creator")
   auditLogs     AuditLog[]
   smsCodes      SmsCode[]
-  positions     Position[]      @relation("PositionCreator")
+
+  @@index([role, status])
+  @@index([createdAt])
 }
 
 model SmsCode {
@@ -41,6 +43,9 @@ model SmsCode {
   createdAt DateTime @default(now())
   userId    String?
   user      User?    @relation(fields: [userId], references: [id])
+
+  @@index([phone, used])
+  @@index([expiresAt])
 }
 
 model Candidate {
@@ -75,7 +80,12 @@ model Candidate {
   applications    Application[]
   feedbacks       CandidateFeedback[]
   offers          Offer[]
-  candidatePositions CandidatePosition[]
+
+  @@index([status, createdAt])
+  @@index([appliedPosition, status])
+  @@index([matchScore])
+  @@index([email])
+  @@index([department])
 }
 
 model JobPosition {
@@ -97,6 +107,9 @@ model JobPosition {
   // Relations
   candidates    Application[]
   interviews    Interview[]
+
+  @@index([status, department])
+  @@index([createdAt])
 }
 
 model Application {
@@ -114,6 +127,9 @@ model Application {
   position      JobPosition  @relation(fields: [positionId], references: [id])
 
   @@unique([candidateId, positionId])
+  @@index([candidateId, status])
+  @@index([positionId, status])
+  @@index([createdAt])
 }
 
 model Interview {
@@ -136,6 +152,10 @@ model Interview {
   position        JobPosition? @relation(fields: [positionId], references: [id])
   interviewer     User        @relation("Interviewer", fields: [interviewerId], references: [id])
   evaluations     InterviewEvaluation[]
+
+  @@index([candidateId, status])
+  @@index([interviewerId, scheduledAt])
+  @@index([scheduledAt])
 }
 
 model InterviewEvaluation {
@@ -156,6 +176,8 @@ model InterviewEvaluation {
 
   interview       Interview @relation(fields: [interviewId], references: [id])
   evaluator       User      @relation(fields: [evaluatorId], references: [id])
+
+  @@index([interviewId, evaluatorId])
 }
 
 model CandidateFeedback {
@@ -167,6 +189,8 @@ model CandidateFeedback {
   createdAt     DateTime @default(now())
 
   candidate     Candidate @relation(fields: [candidateId], references: [id])
+
+  @@index([candidateId, createdAt])
 }
 
 model Offer {
@@ -189,6 +213,9 @@ model Offer {
 
   candidate       Candidate @relation(fields: [candidateId], references: [id])
   creator         User      @relation("Creator", fields: [creatorId], references: [id])
+
+  @@index([candidateId, status])
+  @@index([creatorId, status])
 }
 
 model SSOConfig {
@@ -218,19 +245,6 @@ model PasswordPolicy {
   updatedAt       DateTime @updatedAt
 }
 
-// 数据字典 - 统一管理岗位类型、行业类型、部门等下拉选项
-model Dictionary {
-  id        String   @id @default(cuid())
-  groupKey  String   // category, industry, department
-  value     String   // 显示值
-  sortOrder Int      @default(0)
-  enabled   Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([groupKey, value])
-}
-
 model SystemConfig {
   id              String   @id @default(cuid())
   key             String   @unique
@@ -250,6 +264,10 @@ model AuditLog {
   createdAt   DateTime @default(now())
 
   user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([action, resource])
+  @@index([createdAt])
 }
 
 model Notification {
@@ -261,6 +279,9 @@ model Notification {
   read        Boolean  @default(false)
   link        String?
   createdAt   DateTime @default(now())
+
+  @@index([userId, read])
+  @@index([type, createdAt])
 }
 
 // ============ 新增模型：员工生命周期管理 ============
@@ -269,7 +290,6 @@ model PositionTemplate {
   id              String   @id @default(cuid())
   category        String   // tech, product, design, operations, sales, management
   title           String
-  department      String?  // 所属部门
   description     String?  // 岗位职责模板
   requirements    String?  // 任职要求模板 (JSON)
   skillsWeight    String   @default("{}") // 技能权重 (JSON)
@@ -282,6 +302,10 @@ model PositionTemplate {
   createdBy       String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  @@index([category])
+  @@index([status])
+  @@index([createdBy])
 }
 
 model InterviewFeedback {
@@ -308,6 +332,8 @@ model InterviewFeedback {
   updatedAt         DateTime @updatedAt
 
   @@unique([interviewId, evaluatorId, round])
+  @@index([interviewId, round])
+  @@index([evaluatorId])
 }
 
 model CandidatePool {
@@ -327,6 +353,10 @@ model CandidatePool {
   recommendedFor  String   @default("[]") // JSON array of positionIds
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  @@index([status, location])
+  @@index([yearsExp, education])
+  @@index([createdAt])
 }
 
 model ScreeningQuestion {
@@ -341,6 +371,8 @@ model ScreeningQuestion {
   aiEvaluation    String?  // AI评分意见
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  @@index([candidateId, questionType])
 }
 
 model InterviewPackage {
@@ -356,6 +388,8 @@ model InterviewPackage {
   status          String   @default("pending") // pending, in_progress, completed
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  @@index([interviewId])
 }
 
 model Contract {
@@ -391,6 +425,11 @@ model Contract {
   onboardingId    String?  // 关联入职记录
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  @@index([employeeId, status])
+  @@index([endDate, status])
+  @@index([candidateId])
+  @@index([onboardingId])
 }
 
 model Onboarding {
@@ -425,6 +464,10 @@ model Onboarding {
   notes           String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  @@index([status, startDate])
+  @@index([managerId])
+  @@index([mentorId])
 }
 
 model OnboardingTask {
@@ -440,6 +483,10 @@ model OnboardingTask {
   dueDate         DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  @@index([onboardingId, status])
+  @@index([assigneeId, status])
+  @@index([dueDate])
 }
 
 // 合同续签提醒记录
@@ -459,6 +506,10 @@ model ContractReminder {
   aiGenerated     Boolean  @default(false) // 是否AI生成
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  @@index([contractId, reminderType])
+  @@index([recipientId, status])
+  @@index([scheduledAt, status])
 }
 
 // 合同续签提醒日志/归档
@@ -474,6 +525,9 @@ model ContractReminderLog {
   previousStatus  String?
   newStatus       String?
   createdAt       DateTime @default(now())
+
+  @@index([contractId, createdAt])
+  @@index([actorId, action])
 }
 
 // 合同续签提醒规则配置
@@ -506,6 +560,10 @@ model OnboardingNotification {
   aiGenerated     Boolean  @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  @@index([onboardingId, notificationType])
+  @@index([recipientId, status])
+  @@index([scheduledAt, status])
 }
 
 // 入职每日汇总
@@ -521,6 +579,8 @@ model OnboardingDailySummary {
   notifiedAt      DateTime? // 通知发送时间
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  @@index([summaryDate])
 }
 
 // 入职通知规则配置
@@ -536,47 +596,6 @@ model OnboardingNotificationRule {
   updatedAt       DateTime @updatedAt
 }
 
-// 职位发布
-model Position {
-  id              String   @id @default(cuid())
-  title           String
-  department      String?
-  category        String?
-  industry        String?
-  location        String?
-  headcount       Int      @default(1)
-  salaryMin       Int?
-  salaryMax       Int?
-  description     String   // JD内容
-  requirements    String   @default("[]") // JSON array
-  niceToHave      String   @default("[]") // JSON array
-  status          String   @default("open") // draft, open, closed
-  templateId      String?  // 来源模板ID
-  createdBy       String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  creator         User     @relation("PositionCreator", fields: [createdBy], references: [id])
-  candidates      CandidatePosition[]
-}
-
-// 候选人-职位关联（多对多，含匹配度）
-model CandidatePosition {
-  id          String   @id @default(cuid())
-  candidateId String
-  positionId  String
-  matchScore  Int?     // AI匹配度 0-100
-  matchDetail String?  // JSON: 匹配详情
-  status      String   @default("pending") // pending, matched, contacted, interviewing
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  candidate   Candidate @relation(fields: [candidateId], references: [id])
-  position    Position  @relation(fields: [positionId], references: [id])
-
-  @@unique([candidateId, positionId])
-}
-
 // 邮件模板管理
 model EmailTemplate {
   id              String   @id @default(cuid())
@@ -589,4 +608,6 @@ model EmailTemplate {
   enabled         Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  @@index([category, enabled])
 }

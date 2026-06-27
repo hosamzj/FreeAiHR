@@ -10,16 +10,17 @@ import {
   badRequest,
 } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
+import { loginSchema, changePasswordSchema, validateBody, formatZodErrors } from '@/lib/validation';
 
 // POST /api/auth/login
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password } = body;
-
-    if (!email || !password) {
-      return badRequest('请输入邮箱和密码');
+    const validation = validateBody(loginSchema, body);
+    if (!validation.success) {
+      return badRequest(formatZodErrors(validation.errors));
     }
+    const { email, password } = validation.data;
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
@@ -35,29 +36,28 @@ export async function POST(request: NextRequest) {
       return unauthorized('邮箱或密码错误');
     }
 
-    // Check password expiry
-    if (user.passwordChangedAt) {
-      const daysSinceChange = Math.floor(
-        (Date.now() - new Date(user.passwordChangedAt).getTime()) / (1000 * 60 * 60 * 24)
-      );
-      const policy = await prisma.passwordPolicy.findFirst();
-      const expiryDays = policy?.expiryDays ?? 90;
-      if (daysSinceChange > expiryDays) {
-        const token = generateToken({ userId: user.id, email: user.email, role: user.role, name: user.name });
-        const response = NextResponse.json(success({
-          needPasswordChange: true,
-          reason: `密码已${daysSinceChange}天未修改，请修改密码后继续使用`,
-          user: { id: user.id, email: user.email, name: user.name, role: user.role },
-        }));
-        response.cookies.set('auth_token', token, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
-          maxAge: 60 * 60 * 24, // 24 hours
-          path: '/',
-        });
-        return response;
-      }
+    // Check password expiry (use createdAt as fallback for initial password)
+    const passwordLastChanged = user.passwordChangedAt || user.createdAt;
+    const daysSinceChange = Math.floor(
+      (Date.now() - new Date(passwordLastChanged).getTime()) / (1000 * 60 * 60 * 24)
+    );
+    const policy = await prisma.passwordPolicy.findFirst();
+    const expiryDays = policy?.expiryDays ?? 90;
+    if (daysSinceChange > expiryDays) {
+      const token = generateToken({ userId: user.id, email: user.email, role: user.role, name: user.name });
+      const response = NextResponse.json(success({
+        needPasswordChange: true,
+        reason: `密码已${daysSinceChange}天未修改，请修改密码后继续使用`,
+        user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      }));
+      response.cookies.set('auth_token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 60 * 60 * 24, // 24 hours
+        path: '/',
+      });
+      return response;
     }
 
     // Update last login
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
     response.cookies.set('auth_token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'strict',
       maxAge: 60 * 60 * 24, // 24 hours
       path: '/',
     });
@@ -113,15 +113,15 @@ export async function PUT(request: NextRequest) {
     if (!currentUser) return unauthorized();
 
     const body = await request.json();
-    const { oldPassword, newPassword } = body;
-
-    if (!oldPassword || !newPassword) {
-      return badRequest('请输入旧密码和新密码');
+    const validation = validateBody(changePasswordSchema, body);
+    if (!validation.success) {
+      return badRequest(formatZodErrors(validation.errors));
     }
+    const { oldPassword, newPassword } = validation.data;
 
     // Validate new password
     const policy = await prisma.passwordPolicy.findFirst();
-    const validation = validatePassword(newPassword, {
+    const validationResult = validatePassword(newPassword, {
       minLength: policy?.minLength ?? 8,
       requireUppercase: policy?.requireUppercase ?? true,
       requireLowercase: policy?.requireLowercase ?? true,
@@ -129,8 +129,8 @@ export async function PUT(request: NextRequest) {
       requireSpecial: policy?.requireSpecial ?? true,
     });
 
-    if (!validation.valid) {
-      return badRequest(validation.errors.join('；'));
+    if (!validationResult.valid) {
+      return badRequest(validationResult.errors.join('；'));
     }
 
     const user = await prisma.user.findUnique({ where: { id: currentUser.userId } });
@@ -139,6 +139,12 @@ export async function PUT(request: NextRequest) {
     const isValid = await comparePassword(oldPassword, user.password);
     if (!isValid) {
       return badRequest('旧密码错误');
+    }
+
+    // Check if new password is same as old password
+    const isSamePassword = await comparePassword(newPassword, user.password);
+    if (isSamePassword) {
+      return badRequest('新密码不能与旧密码相同');
     }
 
     const hashedPassword = await hashPassword(newPassword);
@@ -153,7 +159,16 @@ export async function PUT(request: NextRequest) {
       resource: 'auth',
     });
 
-    return success({ message: '密码修改成功' });
+    // Clear auth cookie to force re-login with new password
+    const response = success({ message: '密码修改成功，请重新登录' });
+    response.cookies.set('auth_token', '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 0,
+      path: '/',
+    });
+    return response;
   } catch (err) {
     console.error('Change password error:', err);
     return badRequest('修改密码失败');

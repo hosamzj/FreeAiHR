@@ -2,8 +2,12 @@ import { NextResponse } from 'next/server';
 import { cookies, headers } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import { prisma } from './prisma';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'ai-recruitment-system-jwt-secret-key-2024';
+const JWT_SECRET: string = (process.env.JWT_SECRET || '') as string;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET 环境变量未设置，请在 .env 中配置');
+}
 const TOKEN_EXPIRY = '24h';
 
 export interface JWTPayload {
@@ -15,7 +19,7 @@ export interface JWTPayload {
 
 // Password hashing
 export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 10);
+  return bcrypt.hash(password, 12);
 }
 
 export async function comparePassword(password: string, hash: string): Promise<boolean> {
@@ -83,7 +87,7 @@ export async function setTokenCookie(token: string): Promise<void> {
   cookieStore.set('auth_token', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    sameSite: 'strict',
     maxAge: 60 * 60 * 24, // 24 hours
     path: '/',
   });
@@ -94,7 +98,7 @@ export async function clearTokenCookie(): Promise<void> {
   cookieStore.set('auth_token', '', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    sameSite: 'strict',
     maxAge: 0,
     path: '/',
   });
@@ -161,14 +165,23 @@ export function hasPermission(role: string, permission: string): boolean {
   return perms.includes(permission);
 }
 
-// Auth middleware for API routes
+// Auth middleware for API routes - validates JWT AND user status in DB
 export async function requireAuth(): Promise<JWTPayload | null> {
   const user = await getCurrentUser();
+  if (!user) return null;
+  
+  // Verify user is still active in database
+  const dbUser = await prisma.user.findUnique({ 
+    where: { id: user.userId }, 
+    select: { status: true } 
+  });
+  if (!dbUser || dbUser.status === 'disabled') return null;
+  
   return user;
 }
 
 export async function requireRole(...roles: string[]): Promise<JWTPayload | null> {
-  const user = await getCurrentUser();
+  const user = await requireAuth(); // Use requireAuth to also validate DB status
   if (!user) return null;
   if (!roles.includes(user.role)) return null;
   return user;
