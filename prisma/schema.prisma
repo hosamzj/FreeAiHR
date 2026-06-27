@@ -29,6 +29,7 @@ model User {
   offers        Offer[]         @relation("Creator")
   auditLogs     AuditLog[]
   smsCodes      SmsCode[]
+  positions     Position[]      @relation("PositionCreator")
 }
 
 model SmsCode {
@@ -74,6 +75,7 @@ model Candidate {
   applications    Application[]
   feedbacks       CandidateFeedback[]
   offers          Offer[]
+  candidatePositions CandidatePosition[]
 }
 
 model JobPosition {
@@ -554,7 +556,7 @@ model Position {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  creator         User     @relation(fields: [createdBy], references: [id])
+  creator         User     @relation("PositionCreator", fields: [createdBy], references: [id])
   candidates      CandidatePosition[]
 }
 
