@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Sparkles, Loader2, Brain, Target, TrendingUp, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -8,6 +8,8 @@ interface AICandidateProfileProps {
   candidateId: string;
   candidateName: string;
   position?: string;
+  resumeParsed?: Record<string, unknown>;
+  matchAnalysis?: string;
 }
 
 interface AbilityScores {
@@ -21,7 +23,7 @@ interface AbilityScores {
 
 interface ProfileResult {
   abilities: AbilityScores;
-  personality: {
+  personality?: {
     primary: string;
     secondary: string;
     description: string;
@@ -35,7 +37,7 @@ interface ProfileResult {
   };
 }
 
-export function AICandidateProfile({ candidateId, candidateName, position }: AICandidateProfileProps) {
+export function AICandidateProfile({ candidateId, candidateName, position, resumeParsed, matchAnalysis }: AICandidateProfileProps) {
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<ProfileResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +65,53 @@ export function AICandidateProfile({ candidateId, candidateName, position }: AIC
       setLoading(false);
     }
   };
+
+  const buildProfileFromExcel = useCallback((): ProfileResult | null => {
+    if (!resumeParsed) return null;
+    const scoring = (resumeParsed.scoring as Array<{ dimension: string; score: number; notes: string }>) || [];
+    const strengths = (resumeParsed.strengths as string[]) || [];
+    const gaps = (resumeParsed.gaps as string[]) || [];
+    const recommendation = (resumeParsed.recommendation as string) || '';
+
+    const avg = scoring.length > 0
+      ? scoring.reduce((a, b) => a + (typeof b.score === 'number' ? b.score : 0), 0) / scoring.length
+      : 0;
+    const rawOverallScore = typeof resumeParsed.overallScore === 'number' ? resumeParsed.overallScore : Math.round(avg);
+    const overallScore = Number.isNaN(rawOverallScore) ? 75 : rawOverallScore;
+
+    const dimensionMap: Record<string, string[]> = {
+      technical: ['技能 Skills', '专业 Major', '流程理解 Process'],
+      communication: ['态度/配合 Attitude'],
+      leadership: ['工作经历 Work Exp'],
+      innovation: ['流程理解 Process', '技能 Skills'],
+      execution: ['工作经历 Work Exp', '流程理解 Process'],
+      learning: ['学历 Education', '专业 Major'],
+    };
+
+    const findScore = (keys: string[]) => {
+      const items = scoring.filter(s => keys.includes(s.dimension));
+      if (items.length === 0) return overallScore;
+      return Math.round(items.reduce((a, b) => a + (typeof b.score === 'number' ? b.score : 0), 0) / items.length);
+    };
+
+    return {
+      abilities: {
+        technical: findScore(dimensionMap.technical),
+        communication: findScore(dimensionMap.communication),
+        leadership: findScore(dimensionMap.leadership),
+        innovation: findScore(dimensionMap.innovation),
+        execution: findScore(dimensionMap.execution),
+        learning: findScore(dimensionMap.learning),
+      },
+      evaluation: matchAnalysis || recommendation || '暂无评价',
+      recommendationScore: overallScore,
+      positionMatch: {
+        score: overallScore,
+        strengths: strengths.slice(0, 5),
+        gaps: gaps.slice(0, 5),
+      },
+    };
+  }, [resumeParsed, matchAnalysis]);
 
   // Draw radar chart
   useEffect(() => {
@@ -225,6 +274,12 @@ export function AICandidateProfile({ candidateId, candidateName, position }: AIC
 
   return (
     <div className="space-y-5">
+      {resumeParsed && (
+        <div className="flex items-center gap-2 rounded-lg bg-emerald-500/5 border border-emerald-500/20 px-3 py-2">
+          <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+          <span className="text-xs text-emerald-400">基于 Excel 简历分析数据生成</span>
+        </div>
+      )}
       {/* Scores Overview */}
       <div className="grid grid-cols-3 gap-3">
         <ScoreCard
@@ -255,20 +310,45 @@ export function AICandidateProfile({ candidateId, candidateName, position }: AIC
         </div>
       </div>
 
-      {/* Personality */}
-      <div className="bg-[#0a0e1a] border border-slate-800 rounded-xl p-4">
-        <h4 className="text-xs font-medium text-slate-400 mb-2">九型人格分析</h4>
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-500/10 text-orange-400 shrink-0">
-            <Brain className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-white">{profile.personality?.primary || '未知'}</p>
-            <p className="text-xs text-slate-400 mt-0.5">副型：{profile.personality?.secondary || '未知'}</p>
-            <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">{profile.personality?.description || ''}</p>
+      {/* Excel 原始维度评分 */}
+      {resumeParsed && Array.isArray(resumeParsed.scoring) ? (
+        <div className="bg-[#0a0e1a] border border-slate-800 rounded-xl p-4">
+          <h4 className="text-xs font-medium text-slate-400 mb-3">Excel 原始维度评分</h4>
+          <div className="space-y-2">
+            {(resumeParsed.scoring as Array<{ dimension: string; score: number; notes: string }>).map((item: { dimension: string; score: number; notes: string }, i) => (
+              <div key={i} className="flex items-center justify-between gap-2">
+                <span className="text-xs text-slate-300 truncate flex-1">{item.dimension}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="h-1.5 w-16 overflow-hidden rounded-full bg-[#1e293b]">
+                    <div
+                      className="h-full rounded-full bg-sky-500"
+                      style={{ width: `${Math.min(100, Math.max(0, item.score as number))}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-mono text-sky-400 w-6 text-right">{(item.score as number)}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-      </div>
+      ) : null}
+
+      {/* Personality */}
+      {profile.personality && (
+        <div className="bg-[#0a0e1a] border border-slate-800 rounded-xl p-4">
+          <h4 className="text-xs font-medium text-slate-400 mb-2">九型人格分析</h4>
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-500/10 text-orange-400 shrink-0">
+              <Brain className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-white">{profile.personality.primary}</p>
+              <p className="text-xs text-slate-400 mt-0.5">副型：{profile.personality.secondary}</p>
+              <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">{profile.personality.description}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Summary */}
       <div className="bg-[#0a0e1a] border border-slate-800 rounded-xl p-4">
@@ -329,7 +409,7 @@ function ScoreCard({ icon, label, value, color }: {
   return (
     <div className={cn('rounded-xl border p-3 text-center', colorClasses[color])}>
       <div className="flex justify-center mb-1.5">{icon}</div>
-      <p className="text-xl font-bold font-mono">{value}</p>
+      <p className="text-xl font-bold font-mono">{Number.isNaN(value) ? "-" : value}</p>
       <p className="text-[10px] opacity-70 mt-0.5">{label}</p>
     </div>
   );

@@ -17,7 +17,11 @@ export async function GET(request: NextRequest) {
   const { page, pageSize, status, search, department } = validation.data;
 
   const where: Record<string, unknown> = {};
-  if (status) where.status = status;
+  if (status) {
+    where.status = status;
+  } else {
+    where.status = { notIn: ['offered', 'hired', 'rejected', 'archived', 'pool'] };
+  }
   if (department) where.department = department;
   if (search) {
     where.OR = [

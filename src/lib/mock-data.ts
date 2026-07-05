@@ -15,7 +15,7 @@ export interface Candidate {
   experience: number;
   skills: string[];
   matchScore: number;
-  status: 'new' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected';
+  status: 'new' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected' | 'archived';
   resumeUrl?: string;
   tags: string[];
   appliedAt: string;

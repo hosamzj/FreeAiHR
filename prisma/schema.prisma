@@ -69,6 +69,11 @@ model Candidate {
   matchScore      Int?
   tags            String   @default("[]") // JSON array
   aiSummary       String?
+  matchAnalysis   String?  // 简历与 JD 匹配分析
+  age             Int?
+  location        String?
+  expectedSalary  String?
+  rawResume       String?  // 原始简历文本
   appliedPosition String?
   department      String?
   userId          String?  // Link to candidate portal account
@@ -79,6 +84,7 @@ model Candidate {
   interviews      Interview[]
   applications    Application[]
   feedbacks       CandidateFeedback[]
+  interviewAnalyses InterviewAnalysis[]
   offers          Offer[]
 
   @@index([status, createdAt])
@@ -101,6 +107,10 @@ model JobPosition {
   salaryMax     Int?
   headcount     Int      @default(1)
   channels      String   @default("[]") // JSON array of channels
+  sourceFile    String?  // Excel/JD 来源文件
+  sheetId       String?  // Excel sheet ID
+  rawJd         String?  // 原始 JD 文本
+  structuredRequirements String? @default("{}") // 结构化要求 JSON
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -110,7 +120,9 @@ model JobPosition {
 
   @@index([status, department])
   @@index([createdAt])
+  @@index([sheetId])
 }
+
 
 model Application {
   id            String   @id @default(cuid())
@@ -610,4 +622,44 @@ model EmailTemplate {
   updatedAt       DateTime @updatedAt
 
   @@index([category, enabled])
+}
+
+model InterviewAnalysis {
+  id                String   @id @default(cuid())
+  candidateId       String
+  candidateName     String
+  interviewId       String?
+  sourceFile        String?
+  position          String?
+  basicProfile      String   @default("{}") // JSON
+  jdMatch           String   @default("{}") // JSON
+  strengths         String   @default("[]") // JSON array
+  risks             String   @default("[]") // JSON array
+  quotes            String   @default("[]") // JSON array
+  followUpQuestions String   @default("[]") // JSON array
+  conclusion        String?
+  recommendation    String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  candidate         Candidate @relation(fields: [candidateId], references: [id])
+
+  @@index([candidateId])
+  @@index([createdAt])
+}
+
+model CandidateComparison {
+  id            String   @id @default(cuid())
+  title         String
+  sheetId       String?
+  targetJd      String?
+  targetJdId    String?
+  dimensions    String   @default("[]") // JSON array
+  candidates    String   @default("[]") // JSON array
+  rankings      String   @default("[]") // JSON array
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([sheetId])
+  @@index([createdAt])
 }

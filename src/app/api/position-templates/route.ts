@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
   try {
     await requireAuth();
     const body = await request.json();
-    const { category, title, description, requirements, skillsWeight, experienceWeight, cultureWeight, industry, department } = body;
+    const { category, title, description, requirements, skillsWeight, experienceWeight, cultureWeight, industry} = body;
 
     if (!category || !title) {
       return error(422, '岗位类别和名称不能为空');
@@ -41,7 +41,6 @@ export async function POST(request: NextRequest) {
       data: {
         category,
         title,
-        department,
         description,
         requirements: requirements ? JSON.stringify(requirements) : null,
         skillsWeight: skillsWeight ? JSON.stringify(skillsWeight) : '{}',

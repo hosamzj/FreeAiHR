@@ -59,11 +59,23 @@ interface ParsedResumeData {
   rawTextLength?: number;
   fileUrl?: string;
 }
+import { Candidate } from '@/lib/mock-data';
+
+type ResumeCandidate = Candidate & {
+  age?: number;
+  location?: string;
+  expectedSalary?: string;
+  appliedPosition?: string;
+  resumeParsed?: Record<string, unknown>;
+  matchAnalysis?: string;
+  rawResume?: string;
+};
+
 import { Modal } from '@/components/ui/modal';
 import { ResumePreviewModal } from '@/components/resume-preview-modal';
 import { AICandidateProfile } from '@/components/ai-candidate-profile';
 
-type CandidateStatus = 'new' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected';
+type CandidateStatus = 'new' | 'screening' | 'interviewing' | 'offered' | 'hired' | 'rejected' | 'archived' | 'pool' | 'contacted';
 type TabType = 'all' | CandidateStatus;
 
 export default function ResumesPage() {
@@ -81,14 +93,15 @@ export default function ResumesPage() {
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [showRejectOfferModal, setShowRejectOfferModal] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<string | null>(null);
-  const [candidates, setCandidates] = useState(mockCandidates);
+  const [candidates, setCandidates] = useState<ResumeCandidate[]>(mockCandidates);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showResumePreview, setShowResumePreview] = useState(false);
   const [resumePreviewData, setResumePreviewData] = useState<{ id: string; name: string; position?: string; resumeUrl?: string } | null>(null);
 
   // AI features state
   const [showAIProfileModal, setShowAIProfileModal] = useState(false);
-  const [aiProfileCandidate, setAiProfileCandidate] = useState<{ id: string; name: string; position?: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [aiProfileCandidate, setAiProfileCandidate] = useState<{ id: string; name: string; position?: string; resumeParsed?: Record<string, unknown>; matchAnalysis?: string } | null>(null);
 
   // Duplicate detection state
   const [duplicateInfo, setDuplicateInfo] = useState<{
@@ -166,7 +179,11 @@ export default function ResumesPage() {
             aiSummary: (c.aiSummary as string) || '',
             tags,
             workHistory,
+            position: (c.appliedPosition as string) || (c.currentPosition as string) || '',
             appliedAt: (c.createdAt as string)?.split('T')[0] || new Date().toISOString().split('T')[0],
+            resumeParsed: (c.resumeParsed as Record<string, unknown>) || {},
+            matchAnalysis: (c.matchAnalysis as string) || '',
+            rawResume: (c.rawResume as string) || '',
           };
         });
         setCandidates(transformed);
@@ -191,8 +208,8 @@ export default function ResumesPage() {
     all: candidates.length,
     new: candidates.filter(c => c.status === 'new').length,
     screening: candidates.filter(c => c.status === 'screening').length,
-    interview: candidates.filter(c => c.status === 'interview').length,
-    offer: candidates.filter(c => c.status === 'offer').length,
+    interviewing: candidates.filter(c => c.status === 'interviewing').length,
+    offered: candidates.filter(c => c.status === 'offered').length,
     hired: candidates.filter(c => c.status === 'hired').length,
     rejected: candidates.filter(c => c.status === 'rejected').length,
   };
@@ -201,10 +218,38 @@ export default function ResumesPage() {
     { id: 'all', label: '全部', count: tabCounts.all },
     { id: 'new', label: '新简历', count: tabCounts.new },
     { id: 'screening', label: '筛选中', count: tabCounts.screening },
-    { id: 'interview', label: '面试中', count: tabCounts.interview },
-    { id: 'offer', label: '待Offer', count: tabCounts.offer },
+    { id: 'interviewing', label: '面试中', count: tabCounts.interviewing },
+    { id: 'offered', label: '待Offer', count: tabCounts.offered },
     { id: 'hired', label: '已入职', count: tabCounts.hired },
+    { id: 'rejected', label: '已淘汰', count: tabCounts.rejected },
   ];
+
+  const isExcelFile = (file: File) => /\.(xlsx|xls|csv)$/i.test(file.name);
+
+  const syncExcelFile = async (file: File) => {
+    setIsParsing(true);
+    setParsedResult(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/collection/excel-sync', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.code === 0 && data.data) {
+        alert('Excel 同步完成：共 ' + data.data.total + ' 条，新增 ' + data.data.summary.created + ' 条，更新 ' + data.data.summary.updated + ' 条');
+        fetchCandidates();
+      } else {
+        alert(data.message || 'Excel 同步失败');
+      }
+    } catch (err) {
+      console.error('Excel sync error:', err);
+      alert('Excel 同步失败，请检查网络连接');
+    } finally {
+      setIsParsing(false);
+    }
+  };
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
@@ -212,9 +257,14 @@ export default function ResumesPage() {
     
     const file = e.dataTransfer.files?.[0];
     if (!file) return;
+
+    if (isExcelFile(file)) {
+      await syncExcelFile(file);
+      return;
+    }
     
     await parseResumeFile(file);
-  }, []);
+  }, [fetchCandidates]);
 
   const handleFileSelect = useCallback(() => {
     fileInputRef.current?.click();
@@ -223,6 +273,12 @@ export default function ResumesPage() {
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (isExcelFile(file)) {
+      await syncExcelFile(file);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
 
     // Check for duplicates first
     setCheckingDuplicate(true);
@@ -249,7 +305,8 @@ export default function ResumesPage() {
     setCheckingDuplicate(false);
 
     await parseResumeFile(file);
-  }, []);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, [fetchCandidates]);
 
   // 实际调用 API 解析简历
   const parseResumeFile = async (file: File) => {
@@ -462,7 +519,7 @@ export default function ResumesPage() {
       const candidateRes = await fetch(`/api/candidates/${selectedCandidate}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'interview' }),
+        body: JSON.stringify({ status: 'interviewing' }),
       });
       
       if (!candidateRes.ok) {
@@ -471,7 +528,7 @@ export default function ResumesPage() {
       
       // Update local state
       setCandidates(prev => prev.map(c =>
-        c.id === selectedCandidate ? { ...c, status: 'interview' as const } : c
+        c.id === selectedCandidate ? { ...c, status: 'interviewing' as const } : c
       ));
       
       setShowScheduleModal(false);
@@ -484,15 +541,24 @@ export default function ResumesPage() {
     }
   }, [selectedCandidate, candidates, scheduleForm]);
 
-  const handleReject = useCallback(async (candidateId: string, candidateName: string) => {
+      const handleReject = useCallback(async (candidateId: string, candidateName: string) => {
     if (!confirm(`确定要淘汰 ${candidateName} 吗？`)) return;
     setActionLoading(candidateId);
     try {
-      setCandidates(prev => prev.map(c => 
-        c.id === candidateId ? { ...c, status: 'rejected' as const } : c
-      ));
-      await new Promise(resolve => setTimeout(resolve, 500));
-      alert(`已淘汰 ${candidateName}`);
+      // Add to candidate pool
+      await fetch('/api/candidate-pool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidateId, status: 'rejected' }),
+      });
+      // Update candidate status to archived
+      await fetch(`/api/candidates/${candidateId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'archived' }),
+      });
+      setCandidates(prev => prev.filter(c => c.id !== candidateId));
+      alert(`已淘汰 ${candidateName}，已自动归档到候选人池`);
     } catch (error) {
       alert('操作失败，请重试');
     } finally {
@@ -512,7 +578,7 @@ export default function ResumesPage() {
     setActionLoading(selectedCandidate);
     try {
       setCandidates(prev => prev.map(c =>
-        c.id === selectedCandidate ? { ...c, status: 'offer' as const } : c
+        c.id === selectedCandidate ? { ...c, status: 'offered' as const } : c
       ));
       await new Promise(resolve => setTimeout(resolve, 500));
       const candidate = candidates.find(c => c.id === selectedCandidate);
@@ -568,16 +634,25 @@ export default function ResumesPage() {
   }, []);
 
   // 确认拒绝Offer → 状态变为"已淘汰"
-  const handleConfirmRejectOffer = useCallback(async (reason: string) => {
+      const handleConfirmRejectOffer = useCallback(async (reason: string) => {
     if (!selectedCandidate) return;
     setActionLoading(selectedCandidate);
     try {
-      setCandidates(prev => prev.map(c =>
-        c.id === selectedCandidate ? { ...c, status: 'rejected' as const } : c
-      ));
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Add to candidate pool
+      await fetch('/api/candidate-pool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidateId: selectedCandidate, status: 'rejected' }),
+      });
+      // Update candidate status to archived
+      await fetch(`/api/candidates/${selectedCandidate}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'archived' }),
+      });
+      setCandidates(prev => prev.filter(c => c.id !== selectedCandidate));
       const candidate = candidates.find(c => c.id === selectedCandidate);
-      alert(`${candidate?.name || '候选人'} 已拒绝Offer`);
+      alert(`${candidate?.name || '候选人'} 已拒绝Offer，已自动归档到候选人池`);
       setShowRejectOfferModal(false);
     } catch (error) {
       alert('操作失败，请重试');
@@ -608,32 +683,59 @@ export default function ResumesPage() {
     if (!confirm('确定将该候选人转入候选人池？转入后将从简历管理列表中移除。')) return;
     setActionLoading(candidateId);
     try {
-      const res = await fetch(`/api/candidates/${candidateId}`, {
+      // Add to candidate pool
+      await fetch('/api/candidate-pool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidateId, status: 'rejected' }),
+      });
+      // Update candidate status to archived
+      await fetch(`/api/candidates/${candidateId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'pool' }),
+        body: JSON.stringify({ status: 'archived' }),
       });
-      if (res.ok) {
-        setCandidates(prev => prev.filter(c => c.id !== candidateId));
-      }
+      setCandidates(prev => prev.filter(c => c.id !== candidateId));
+      alert('已转入候选人池');
+    } catch (error) {
+      alert('操作失败，请重试');
     } finally {
       setActionLoading(null);
     }
   }, []);
 
-  // Delete candidate permanently
-  const handleDeleteCandidate = useCallback(async (candidateId: string) => {
-    if (!confirm('确定永久删除该候选人？此操作不可撤销。')) return;
-    setActionLoading(candidateId);
+  // Delete candidate permanently (opens confirmation modal)
+  const handleDeleteCandidate = useCallback((candidateId: string, candidateName?: string) => {
+    setDeleteConfirm({ id: candidateId, name: candidateName || '该候选人' });
+  }, []);
+
+  // Confirm and execute delete
+  const confirmDeleteCandidate = useCallback(async () => {
+    if (!deleteConfirm) return;
+    const { id, name } = deleteConfirm;
+    setActionLoading(id);
     try {
-      const res = await fetch(`/api/candidates/${candidateId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/candidates/${id}`, { method: 'DELETE' });
       if (res.ok) {
-        setCandidates(prev => prev.filter(c => c.id !== candidateId));
+        setCandidates(prev => prev.filter(c => c.id !== id));
+      } else {
+        let errorMessage = '删除失败';
+        try {
+          const errorData = await res.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch {
+          // ignore parse error
+        }
+        alert(errorMessage);
       }
+    } catch (error) {
+      console.error('Delete candidate error:', error);
+      alert('删除失败，请检查网络连接');
     } finally {
       setActionLoading(null);
+      setDeleteConfirm(null);
     }
-  }, []);
+  }, [deleteConfirm]);
 
   // Filter candidates based on active tab
   const filteredCandidates = candidates.filter(candidate => {
@@ -653,7 +755,7 @@ export default function ResumesPage() {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.xlsx,.xls,.csv"
         className="hidden"
         onChange={handleFileChange}
       />
@@ -681,14 +783,7 @@ export default function ResumesPage() {
           </button>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowImportModal(true)}
-            className="flex h-9 items-center gap-1.5 rounded-lg border border-[#1e293b] bg-[#111827] px-2.5 text-sm text-slate-400 hover:text-white transition-colors sm:px-3"
-          >
-            <FileText className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">批量导入</span>
-            <span className="sm:hidden">导入</span>
-          </button>
+          {/* 批量导入已移除，请使用上方拖拽区上传简历或 Excel */}
         </div>
       </div>
 
@@ -727,9 +822,9 @@ export default function ResumesPage() {
             <>
               <Upload className={cn('h-7 w-7 md:h-8 md:w-8 mb-2 md:mb-3 transition-colors', isUploading ? 'text-sky-400' : 'text-slate-600')} />
               <p className="text-xs md:text-sm text-slate-400 text-center">
-                拖拽简历到此处，或 <span className="text-sky-400 cursor-pointer hover:text-sky-300">点击上传</span>
+                拖拽简历或 Excel 到此处，或 <span className="text-sky-400 cursor-pointer hover:text-sky-300">点击上传</span>
               </p>
-              <p className="mt-1 text-[11px] md:text-xs text-slate-600">支持 PDF、Word、图片格式</p>
+              <p className="mt-1 text-[11px] md:text-xs text-slate-600">支持 PDF、Word、图片、Excel 格式</p>
             </>
           )}
         </div>
@@ -915,13 +1010,13 @@ export default function ResumesPage() {
                       'rounded-full px-1.5 md:px-2 py-0.5 text-[9px] md:text-[10px]',
                       candidate.status === 'new' ? 'bg-sky-500/10 text-sky-400' :
                       candidate.status === 'screening' ? 'bg-amber-500/10 text-amber-400' :
-                      candidate.status === 'interview' ? 'bg-violet-500/10 text-violet-400' :
-                      candidate.status === 'offer' ? 'bg-emerald-500/10 text-emerald-400' :
+                      candidate.status === 'interviewing' ? 'bg-violet-500/10 text-violet-400' :
+                      candidate.status === 'offered' ? 'bg-emerald-500/10 text-emerald-400' :
                       candidate.status === 'hired' ? 'bg-green-500/10 text-green-400' :
                       'bg-red-500/10 text-red-400'
                     )}>
                       {candidate.status === 'new' ? '新投递' : candidate.status === 'screening' ? '筛选中' :
-                       candidate.status === 'interview' ? '面试中' : candidate.status === 'offer' ? '待Offer' :
+                       candidate.status === 'interviewing' ? '面试中' : candidate.status === 'offered' ? '待Offer' :
                        candidate.status === 'hired' ? '已入职' : '已淘汰'}
                     </span>
                     <span className="flex items-center gap-0.5 text-[10px] md:text-[11px] text-slate-500">
@@ -929,16 +1024,30 @@ export default function ResumesPage() {
                     </span>
                   </div>
                 </div>
-                <div className={cn(
-                  'flex h-9 w-9 md:h-11 md:w-11 shrink-0 flex-col items-center justify-center rounded-lg',
-                  candidate.matchScore >= 80 ? 'bg-emerald-500/10' : 'bg-amber-500/10'
-                )}>
-                  <span className={cn(
-                    'font-mono text-sm md:text-base font-bold',
-                    candidate.matchScore >= 80 ? 'text-emerald-400' : 'text-amber-400'
+                <div className="flex shrink-0 flex-col items-center gap-1.5">
+                  <div className={cn(
+                    'flex h-9 w-9 md:h-11 md:w-11 shrink-0 flex-col items-center justify-center rounded-lg',
+                    candidate.source === 'excel_import' ? 'bg-sky-500/10' : candidate.matchScore >= 80 ? 'bg-emerald-500/10' : 'bg-amber-500/10'
                   )}>
-                    {candidate.matchScore}
-                  </span>
+                    <span title={candidate.source === 'excel_import' ? '评分来源：Excel 导入' : '评分来源：AI 评估'} className={cn(
+                      'font-mono text-sm md:text-base font-bold',
+                      candidate.source === 'excel_import' ? 'text-sky-400' : candidate.matchScore >= 80 ? 'text-emerald-400' : 'text-amber-400'
+                    )}>
+                      {candidate.matchScore}
+                    </span>
+                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDeleteCandidate(candidate.id, candidate.name); }}
+                    disabled={actionLoading === candidate.id}
+                    title="删除候选人"
+                    className="flex h-7 w-7 md:h-8 md:w-8 items-center justify-center rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                  >
+                    {actionLoading === candidate.id ? (
+                      <div className="h-3 w-3 rounded-full border-2 border-red-400/30 border-t-red-400 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5" />
+                    )}
+                  </button>
                 </div>
               </div>
 
@@ -967,7 +1076,11 @@ export default function ResumesPage() {
                     <p className="text-[11px] md:text-xs font-medium text-slate-300">流程追踪</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {candidate.status === 'hired' ? (
+                    {candidate.status === 'rejected' || candidate.status === 'archived' ? (
+                      <span className="flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] md:text-[11px] text-red-400">
+                        <X className="h-3 w-3" /> 已淘汰
+                      </span>
+                    ) : candidate.status === 'hired' ? (
                       <>
                         <span className="flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] md:text-[11px] text-green-400">
                           <CheckCircle className="h-3 w-3" /> 已完成入职
@@ -976,11 +1089,11 @@ export default function ResumesPage() {
                           查看合同 →
                         </a>
                       </>
-                    ) : candidate.status === 'offer' ? (
+                    ) : candidate.status === 'offered' ? (
                       <span className="flex items-center gap-1 rounded-full bg-orange-500/10 px-2 py-0.5 text-[10px] md:text-[11px] text-orange-400">
                         <FileText className="h-3 w-3" /> 待接受Offer
                       </span>
-                    ) : candidate.status === 'interview' ? (
+                    ) : candidate.status === 'interviewing' ? (
                       <span className="flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] md:text-[11px] text-blue-400">
                         <Calendar className="h-3 w-3" /> 面试中
                       </span>
@@ -997,54 +1110,86 @@ export default function ResumesPage() {
                 </div>
                 <div>
                   <p className="text-[11px] md:text-xs font-medium text-slate-400 mb-1">AI 评估摘要</p>
-                  <p className="text-[11px] md:text-xs leading-relaxed text-slate-300">{candidate.aiSummary}</p>
+                  <p className="text-[11px] md:text-xs leading-relaxed text-slate-300">
+                    {candidate.matchAnalysis || candidate.aiSummary || '暂无评估摘要'}
+                  </p>
                 </div>
                 <div>
                   <p className="text-[11px] md:text-xs font-medium text-slate-400 mb-1.5">工作经历</p>
                   <div className="space-y-2">
-                    {(candidate.workHistory || []).map((work, i) => (
-                      <div key={i} className="flex items-start gap-2">
-                        <div className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500/50" />
-                        <div>
-                          <p className="text-[11px] md:text-xs text-slate-300">{work.company} · {work.position}</p>
-                          <p className="text-[10px] md:text-[11px] text-slate-500">{work.duration}</p>
+                    {(() => {
+                      const basicInfo = candidate.resumeParsed?.basicInfo as string | undefined;
+                      if (basicInfo) {
+                        return <p className="text-[11px] md:text-xs text-slate-300">{basicInfo}</p>;
+                      }
+                      return (candidate.workHistory || []).map((work, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <div className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500/50" />
+                          <div>
+                            <p className="text-[11px] md:text-xs text-slate-300">{work.company} · {work.position}</p>
+                            <p className="text-[10px] md:text-[11px] text-slate-500">{work.duration}</p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ));
+                    })()}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2 pt-1">
-                  {/* 查看简历按钮 */}
-                  <button
-                    onClick={() => {
-                      setResumePreviewData({
-                        id: candidate.id,
-                        name: candidate.name,
-                        position: candidate.position,
-                        resumeUrl: candidate.resumeUrl,
-                      });
-                      setShowResumePreview(true);
-                    }}
-                    className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-sky-500/20 px-2.5 md:px-3 text-[11px] md:text-xs text-sky-400 hover:bg-sky-500/10 cursor-pointer transition-colors"
-                  >
-                    <FileText className="h-3 w-3" />
-                    {candidate.resumeUrl ? '详细信息' : '上传简历'}
-                  </button>
-                  {/* AI画像按钮 */}
-                  <button
-                    onClick={() => {
-                      setAiProfileCandidate({
-                        id: candidate.id,
-                        name: candidate.name,
-                        position: candidate.position,
-                      });
-                      setShowAIProfileModal(true);
-                    }}
-                    className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-orange-500/20 px-2.5 md:px-3 text-[11px] md:text-xs text-orange-400 hover:bg-orange-500/10 cursor-pointer transition-colors"
-                  >
-                    <Brain className="h-3 w-3" />
-                    AI画像
-                  </button>
+                  {/* 查看简历按钮：已淘汰/已归档时只展示，禁止上传入口 */}
+                  {candidate.status === 'rejected' || candidate.status === 'archived' ? (
+                    candidate.resumeUrl ? (
+                      <button
+                        onClick={() => {
+                          setResumePreviewData({
+                            id: candidate.id,
+                            name: candidate.name,
+                            position: candidate.position,
+                            resumeUrl: candidate.resumeUrl,
+                          });
+                          setShowResumePreview(true);
+                        }}
+                        className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-sky-500/20 px-2.5 md:px-3 text-[11px] md:text-xs text-sky-400 hover:bg-sky-500/10 cursor-pointer transition-colors"
+                      >
+                        <FileText className="h-3 w-3" />
+                        查看简历
+                      </button>
+                    ) : null
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setResumePreviewData({
+                          id: candidate.id,
+                          name: candidate.name,
+                          position: candidate.position,
+                          resumeUrl: candidate.resumeUrl,
+                        });
+                        setShowResumePreview(true);
+                      }}
+                      className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-sky-500/20 px-2.5 md:px-3 text-[11px] md:text-xs text-sky-400 hover:bg-sky-500/10 cursor-pointer transition-colors"
+                    >
+                      <FileText className="h-3 w-3" />
+                      {candidate.resumeUrl ? '详细信息' : '上传简历'}
+                    </button>
+                  )}
+                  {/* AI画像按钮：已淘汰/已归档时隐藏 */}
+                  {candidate.status !== 'rejected' && candidate.status !== 'archived' && (
+                    <button
+                      onClick={() => {
+                        setAiProfileCandidate({
+                          id: candidate.id,
+                          name: candidate.name,
+                          position: candidate.position,
+                          resumeParsed: candidate.resumeParsed,
+                          matchAnalysis: candidate.matchAnalysis,
+                        });
+                        setShowAIProfileModal(true);
+                      }}
+                      className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-orange-500/20 px-2.5 md:px-3 text-[11px] md:text-xs text-orange-400 hover:bg-orange-500/10 cursor-pointer transition-colors"
+                    >
+                      <Brain className="h-3 w-3" />
+                      AI画像
+                    </button>
+                  )}
 
                   {/* 新简历 → 通过筛选、淘汰 */}
                   {candidate.status === 'new' && (
@@ -1095,7 +1240,7 @@ export default function ResumesPage() {
                   )}
 
                   {/* 面试中 → 通过面试（发Offer）、淘汰 */}
-                  {candidate.status === 'interview' && (
+                  {candidate.status === 'interviewing' && (
                     <>
                       <button
                         onClick={() => handlePassInterview(candidate.id)}
@@ -1119,7 +1264,7 @@ export default function ResumesPage() {
                   )}
 
                   {/* 待Offer → 接受Offer入职、拒绝Offer */}
-                  {candidate.status === 'offer' && (
+                  {candidate.status === 'offered' && (
                     <>
                       <button
                         onClick={() => handleAcceptOffer(candidate.id, candidate.name)}
@@ -1151,7 +1296,7 @@ export default function ResumesPage() {
                   )}
 
                   {/* 已淘汰 → 重新激活 / 转入候选人池 / 删除 */}
-                  {candidate.status === 'rejected' && (
+                  {(candidate.status === 'rejected' || candidate.status === 'archived') && (
                     <div className="flex items-center gap-1.5">
                       <button
                         onClick={() => handleReactivate(candidate.id, candidate.name)}
@@ -1172,7 +1317,7 @@ export default function ResumesPage() {
                         <UserPlus className="h-3 w-3" /> 转入池
                       </button>
                       <button
-                        onClick={() => handleDeleteCandidate(candidate.id)}
+                        onClick={(e) => { e.stopPropagation(); handleDeleteCandidate(candidate.id, candidate.name); }}
                         disabled={actionLoading === candidate.id}
                         className="flex h-7 md:h-8 items-center gap-1 rounded-lg border border-red-500/20 px-2 md:px-2.5 text-[11px] md:text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
                       >
@@ -1260,47 +1405,6 @@ export default function ResumesPage() {
             </button>
             <button onClick={() => setShowFilterModal(false)} className="flex-1 h-9 rounded-lg border border-[#1e293b] text-sm text-slate-400 hover:text-white transition-colors">
               重置
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Batch Import Modal */}
-      <Modal isOpen={showImportModal} onClose={() => setShowImportModal(false)} title="批量导入简历">
-        <div className="space-y-4">
-          <div
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => e.preventDefault()}
-            className="rounded-xl border-2 border-dashed border-[#1e293b] bg-[#0a0e1a]/50 p-6 text-center hover:border-slate-600 transition-colors cursor-pointer"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Upload className="h-8 w-8 mx-auto mb-3 text-slate-600" />
-            <p className="text-sm text-slate-400">拖拽文件到此处，或 <span className="text-sky-400">点击选择文件</span></p>
-            <p className="mt-1 text-xs text-slate-600">支持 PDF、Word 格式，单次最多 20 个文件</p>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1.5">导入到岗位</label>
-            <select
-              value={importPositionId}
-              onChange={(e) => setImportPositionId(e.target.value)}
-              className="w-full h-9 rounded-lg border border-[#1e293b] bg-[#0a0e1a] px-3 text-sm text-slate-300 focus:border-sky-500/50 focus:outline-none"
-            >
-              <option value="">选择目标岗位（可选）</option>
-              {positions.map((p) => (
-                <option key={p.id} value={p.id}>{p.title}{p.department ? ` - ${p.department}` : ''}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center gap-2 rounded-lg bg-sky-500/5 border border-sky-500/20 p-3">
-            <Sparkles className="h-4 w-4 text-sky-400 shrink-0" />
-            <p className="text-xs text-sky-400">导入后将自动进行 AI 解析和匹配度评估</p>
-          </div>
-          <div className="flex gap-2 pt-2">
-            <button onClick={() => setShowImportModal(false)} className="flex-1 h-9 rounded-lg bg-sky-500 text-sm font-medium text-white hover:bg-sky-600 transition-colors">
-              开始导入
-            </button>
-            <button onClick={() => setShowImportModal(false)} className="flex-1 h-9 rounded-lg border border-[#1e293b] text-sm text-slate-400 hover:text-white transition-colors">
-              取消
             </button>
           </div>
         </div>
@@ -1596,8 +1700,12 @@ export default function ResumesPage() {
                       aiSummary: (c.aiSummary as string) || '',
                       appliedPosition: (c.appliedPosition as string) || '',
                       tags: parseJsonArray(c.tags),
-                      status: (c.status as 'new' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected') || 'new',
+                      status: (c.status as CandidateStatus) || 'new',
                       workHistory: parseWorkHistory(c.workHistory),
+                      position: (c.appliedPosition as string) || (c.currentPosition as string) || '',
+                      resumeParsed: (c.resumeParsed as Record<string, unknown>) || {},
+                      matchAnalysis: (c.matchAnalysis as string) || '',
+                      rawResume: (c.rawResume as string) || '',
                       resumeUrl: (c.resumeUrl as string) || undefined,
                     };
                   });
@@ -1704,8 +1812,34 @@ export default function ResumesPage() {
             candidateId={aiProfileCandidate.id}
             candidateName={aiProfileCandidate.name}
             position={aiProfileCandidate.position}
+            resumeParsed={aiProfileCandidate.resumeParsed}
+            matchAnalysis={aiProfileCandidate.matchAnalysis}
           />
         )}
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal isOpen={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} title="删除候选人">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-300">
+            确定要删除 <span className="font-medium text-white">{deleteConfirm?.name}</span> 吗？此操作不可恢复。
+          </p>
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={confirmDeleteCandidate}
+              disabled={actionLoading === deleteConfirm?.id}
+              className="flex-1 h-9 rounded-lg bg-red-500 text-sm font-medium text-white hover:bg-red-600 disabled:opacity-50 transition-colors"
+            >
+              {actionLoading === deleteConfirm?.id ? '删除中...' : '确认删除'}
+            </button>
+            <button
+              onClick={() => setDeleteConfirm(null)}
+              className="flex-1 h-9 rounded-lg border border-[#1e293b] text-sm text-slate-400 hover:text-white transition-colors"
+            >
+              取消
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

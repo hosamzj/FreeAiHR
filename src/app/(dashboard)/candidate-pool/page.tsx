@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Target, Search, Filter, UserPlus, Star, RefreshCw } from 'lucide-react';
+import { Target, Search, Filter, UserPlus, Star, RefreshCw, Trash2 } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
 
 interface PoolCandidate {
@@ -80,6 +80,16 @@ export default function CandidatePoolPage() {
       loadPool();
     } catch (e) {
       console.error('Update status error:', e);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('确定要从候选人池中删除该记录？此操作不可撤销。')) return;
+    try {
+      await fetch(`/api/candidate-pool?id=${id}`, { method: 'DELETE' });
+      loadPool();
+    } catch (e) {
+      console.error('Delete pool error:', e);
     }
   };
 
@@ -206,6 +216,12 @@ export default function CandidatePoolPage() {
                   <option value="blacklist">黑名单</option>
                   <option value="hired">已入职</option>
                 </select>
+                <button
+                  onClick={() => handleDelete(p.id)}
+                  className="shrink-0 flex items-center gap-1 rounded-lg border border-red-500/20 px-2 py-1 text-[11px] text-red-400 hover:bg-red-500/10 transition-colors"
+                >
+                  <Trash2 className="h-3 w-3" /> 删除
+                </button>
               </div>
             </div>
           ))

@@ -285,3 +285,87 @@ function extractFromPrompt(prompt: string, key: string): string {
 
 // 别名导出 - 供API路由使用
 export const generateAIContent = callLLM;
+
+export interface ParsedResume {
+  name: string;
+  phone: string;
+  email: string;
+  gender?: string;
+  age?: number;
+  location?: string;
+  education: { school: string; degree: string; major: string; startDate?: string; endDate?: string }[];
+  workExperience: { company: string; position: string; startDate?: string; endDate?: string; description: string }[];
+  skills: string[];
+  certificates?: string[];
+  languages?: string[];
+  summary?: string;
+  expectedSalary?: string;
+  expectedPosition?: string;
+}
+
+export async function parseResumeWithLLM(
+  input: string | { type: 'image'; base64: string; mimeType: string }
+): Promise<ParsedResume> {
+  const basePrompt = `请从以下简历中提取结构化信息，并以JSON格式返回。注意：只返回JSON对象，不要包含任何解释或markdown代码块。
+
+需要提取的字段：
+- name: 姓名（字符串）
+- phone: 电话（字符串）
+- email: 邮箱（字符串）
+- gender: 性别（字符串，可选）
+- age: 年龄（数字，可选）
+- location: 所在城市（字符串，可选）
+- education: 教育经历数组，每项包含 school、degree、major
+- workExperience: 工作经历数组，每项包含 company、position、description
+- skills: 技能数组
+- certificates: 证书数组（可选）
+- languages: 语言数组（可选）
+- summary: 个人总结（字符串，可选）
+- expectedSalary: 期望薪资（字符串，可选）
+- expectedPosition: 期望职位（字符串，可选）`;
+
+  let prompt: string;
+  if (typeof input === 'string') {
+    prompt = `${basePrompt}
+
+简历文本：
+${input}`;
+  } else {
+    prompt = `${basePrompt}
+
+请解析这张简历图片。`;
+  }
+
+  try {
+    const response = await callLLM(prompt, { format: 'json' });
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    const data = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(response);
+
+    return {
+      name: data.name || '未知候选人',
+      phone: String(data.phone || ''),
+      email: String(data.email || ''),
+      gender: data.gender || undefined,
+      age: typeof data.age === 'number' ? data.age : undefined,
+      location: data.location || undefined,
+      education: Array.isArray(data.education) ? data.education : [],
+      workExperience: Array.isArray(data.workExperience) ? data.workExperience : [],
+      skills: Array.isArray(data.skills) ? data.skills : [],
+      certificates: Array.isArray(data.certificates) ? data.certificates : [],
+      languages: Array.isArray(data.languages) ? data.languages : [],
+      summary: data.summary || undefined,
+      expectedSalary: data.expectedSalary || undefined,
+      expectedPosition: data.expectedPosition || undefined,
+    };
+  } catch (err) {
+    console.error('parseResumeWithLLM error:', err);
+    return {
+      name: '未知候选人',
+      phone: '',
+      email: '',
+      education: [],
+      workExperience: [],
+      skills: [],
+    };
+  }
+}

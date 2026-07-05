@@ -28,17 +28,19 @@ import {
   Clock,
   AlertTriangle,
   Mail,
-  Pause,
-  StopCircle,
-  FileText,
-  Eye,
+ Pause,
+ StopCircle,
+ FileText,
+ Eye,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Modal } from '@/components/ui/modal';
+import ExcelImportSection from '@/components/excel-import-section';
 
 // Collection modes - only mock and RPA (platform API removed as 51job/Boss don't have open APIs)
 type CollectionMode = 'mock' | 'rpa';
-type CollectionTab = 'channels' | 'email' | 'tasks';
+type CollectionTab = 'channels' | 'email' | 'tasks' | 'excel';
 
 interface CollectionModeConfig {
   id: CollectionMode;
@@ -420,16 +422,27 @@ export default function CollectionPage() {
           <Mail className="w-4 h-4 inline mr-1.5" />
           邮箱导入
         </button>
+       <button
+         onClick={() => { setActiveTab('tasks'); loadTasks(); }}
+         className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+           activeTab === 'tasks'
+             ? 'bg-[#1a2236] text-[#38bdf8] shadow-sm'
+             : 'text-[#94a3b8] hover:text-[#e2e8f0]'
+         }`}
+       >
+         <FileText className="w-4 h-4 inline mr-1.5" />
+         任务管理
+       </button>
         <button
-          onClick={() => { setActiveTab('tasks'); loadTasks(); }}
+          onClick={() => setActiveTab('excel')}
           className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-            activeTab === 'tasks'
+            activeTab === 'excel'
               ? 'bg-[#1a2236] text-[#38bdf8] shadow-sm'
               : 'text-[#94a3b8] hover:text-[#e2e8f0]'
           }`}
         >
-          <FileText className="w-4 h-4 inline mr-1.5" />
-          任务管理
+          <FileSpreadsheet className="w-4 h-4 inline mr-1.5" />
+          Excel 导入
         </button>
       </div>
 
@@ -709,9 +722,14 @@ export default function CollectionPage() {
                 </div>
               ))}
             </div>
-          )}
-        </div>
-      )}
+         )}
+       </div>
+     )}
+
+     {/* Collection Results */}
+
+      {/* Excel Import Tab */}
+      {activeTab === 'excel' && <ExcelImportSection />}
 
       {/* Collection Results */}
       {collectedCandidates.length > 0 && (

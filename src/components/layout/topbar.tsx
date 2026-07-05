@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useAppContext } from '@/lib/app-context';
-import { Bell, Search, User, Sparkles, Menu, X } from 'lucide-react';
+import { Bell, Search, User, Menu, X } from 'lucide-react';
 
 const moduleTitles: Record<string, { title: string; subtitle: string }> = {
   dashboard: { title: '招聘看板', subtitle: '实时数据概览与招聘漏斗分析' },
@@ -58,12 +59,6 @@ export function TopBar() {
           <Search className="h-4.5 w-4.5" />
         </button>
 
-        {/* AI Badge - icon only on mobile */}
-        <div className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-sky-500/10 to-orange-500/10 px-2 py-1.5 border border-sky-500/20 md:px-3">
-          <Sparkles className="h-3.5 w-3.5 text-sky-400 ai-pulse" />
-          <span className="hidden text-xs font-medium text-sky-400 md:inline">AI 助手</span>
-        </div>
-
         {/* Notifications */}
         <div className="relative">
           <button 
@@ -112,9 +107,13 @@ export function TopBar() {
                   ))}
                 </div>
                 <div className="border-t border-[#1e293b] p-3">
-                  <button className="w-full rounded-lg py-2 text-xs font-medium text-sky-400 hover:bg-sky-500/10 cursor-pointer">
+                  <Link
+                    href="/notifications"
+                    onClick={() => setShowNotifications(false)}
+                    className="block w-full rounded-lg py-2 text-center text-xs font-medium text-sky-400 hover:bg-sky-500/10 cursor-pointer"
+                  >
                     查看全部通知
-                  </button>
+                  </Link>
                 </div>
               </div>
             </>
