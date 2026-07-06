@@ -62,7 +62,7 @@ export async function middleware(request: NextRequest) {
 
   // Check admin-only routes
   const isAdminRoute = ADMIN_ROUTES.some((route) => pathname.startsWith(route));
-  if (isAdminRoute && user.role !== 'admin') {
+  if (isAdminRoute && user?.role !== 'admin') {
     return NextResponse.redirect(new URL('/403', request.url));
   }
 
